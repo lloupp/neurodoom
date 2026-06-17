@@ -1,0 +1,99 @@
+import type { MapManifest } from '../MapSchema';
+
+const level1: MapManifest = {
+  id: 'sublevel_3',
+  name: 'Sublevel 3 — Meridian Blacksite',
+  author: 'neurodoom-system',
+  cellSize: 1,
+  spawn: { x: 2.5, y: 2.5, face: 0 },
+  // 32x20 — 8 logical rooms connected by corridors.
+  // tile legend: '#'=solid '.=empty D'=door M'=metal P'=panel X'=circuit S'=screen O'=organic
+  tiles: [
+    '################################',
+    '#......D.......#..............#',
+    '#......D.......#..............#',
+    '#.....###.....##.######.......#',
+    '#.....#.#.....##.#....#.......#',
+    '#.....#.#.....##.#....#.......#',
+    '#.....#.#.....##.#....D.......#',
+    '#.....#.#.....##.#....#.......#',
+    '#.....#.#.....##.######.......#',
+    '#.....#.#......M..............#',
+    '#.....#.#......#..............#',
+    '#.....#.#......#.#######......#',
+    '#.....#.#......#.#.....#......#',
+    '#.....#.#......#.#.....#......#',
+    '#.....#.#......M.#.....#......#',
+    '#.....#.#......#.#.....#......#',
+    '#.....#.#......#.#.....#......#',
+    '#.....#.#......#.M.....#......#',
+    '#.....#.#......#..............#',
+    '################################',
+  ],
+  enemies: [
+    {
+      kind: 'drone',
+      x: 17,
+      y: 6,
+      patrol: [
+        [16, 6],
+        [22, 6],
+        [22, 16],
+        [16, 16],
+      ],
+      sight: 8,
+    },
+    {
+      kind: 'heavy',
+      x: 11,
+      y: 14,
+      patrol: [
+        [10, 13],
+        [14, 13],
+        [14, 17],
+        [10, 17],
+      ],
+      sight: 7,
+    },
+  ],
+  interactables: [
+    { id: 'door_entry_to_corridor', kind: 'door', x: 7, y: 1, locked: false, unlockFlag: undefined },
+    { id: 'door_corridor_to_lab1', kind: 'door', x: 15, y: 2, locked: false, unlockFlag: undefined },
+    { id: 'door_corridor_to_lab2', kind: 'door', x: 15, y: 7, locked: false, unlockFlag: undefined },
+    { id: 'door_lab2_hub', kind: 'door', x: 22, y: 6, locked: false, unlockFlag: undefined },
+    { id: 'door_terminal_room', kind: 'door', x: 12, y: 11, locked: false, unlockFlag: undefined },
+    { id: 'door_secure_lab', kind: 'door', x: 20, y: 13, locked: true, unlockFlag: 'flag_lab_terminal' },
+
+    { id: 'terminal_lab_info', kind: 'terminal', x: 9, y: 4, hack: false,
+      prompt: 'Lab terminal // STATION 3',
+      transcript: '> Audit log: Subject 14 woke during SHIVA transfer.\n> Cleaners dispatched. Don\u2019t trust the audio feed.' },
+
+    { id: 'terminal_lock_lab',  kind: 'terminal', x: 9, y: 14, hack: true,
+      prompt: 'Secure lab terminal',
+      unlockFlag: 'flag_lab_terminal',
+      transcript: '> SHIVA mark 0xCAFE attempted remote override. Wake protocol: /jack/.\n> Subject 14 is you. Don\u2019t listen to the lullabies.' },
+
+    { id: 'log_first', kind: 'audio_log', x: 4, y: 6,
+      prompt: 'Audio Log // SUBJECT 14',
+      audioKey: 'log_subject_14',
+      transcript: 'I can hear the static through the walls. They call it SHIVA here. I keep hearing my mother.' },
+    { id: 'log_shiva',  kind: 'audio_log', x: 18, y: 1,
+      prompt: 'Audio Log // SHIVA',
+      audioKey: 'log_shiva',
+      transcript: 'Subjects are armature. The signal passes through. They wake when we sleep them.' },
+    { id: 'keycard_red', kind: 'keycard', x: 11, y: 2,
+      prompt: 'Red keycard — ID override' },
+    { id: 'medkit_1', kind: 'medkit', x: 3, y: 18,
+      prompt: 'Field Medkit' },
+    { id: 'ammo_1',   kind: 'ammo', x: 21, y: 18,
+      prompt: 'Pulse Rifle ammo' },
+  ],
+  triggers: [
+    // Unlocking the secure lab door flag triggers a ghost spawn in adjacent corridor
+    { x: 20, y: 14, type: 'set_flag', data: { key: 'flag_lab_terminal' } },
+    { x: 14, y: 12, type: 'spawn_ghost', data: { kind: 'heavy' } },
+  ],
+};
+
+export default level1;
+export const LEVEL_1 = level1;

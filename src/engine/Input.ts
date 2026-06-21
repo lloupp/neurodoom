@@ -43,6 +43,13 @@ export class Input {
     }
   }
 
+  /** Releases pointer lock so mouse events target visible elements again (e.g. panel buttons). */
+  exitPointerLock(): void {
+    if (document.pointerLockElement === this.domTarget) {
+      document.exitPointerLock?.();
+    }
+  }
+
   isLocked(): boolean { return this.locked; }
 
   /** Read & clear per-frame edge flags. Continuous flags stay live. */

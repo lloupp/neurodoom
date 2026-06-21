@@ -11,15 +11,24 @@ describe('Hacking - vertical slice', () => {
     expect(normal.program.length).toBe(6);
   });
 
-  it('completion wins when all missing slots filled with valid tokens', () => {
+  it('completion wins only when missing slots are filled with the real (cipher-deduced) solution', () => {
     const puzzle = generatePuzzle(7, 'easy');
     const state = startHack(puzzle);
     for (const idx of puzzle.missingIndices) {
-      submitToken(state, idx, 'MOV');
+      submitToken(state, idx, puzzle.solution[idx]!);
     }
-    expect(state.puzzle.missingIndices.every((i) => (state.userInput.get(i) ?? '').length > 0)).toBe(true);
     tickHack(state, 0.01);
-    expect(state.status === 'won' || state.status === 'running').toBe(true);
+    expect(state.status).toBe('won');
+  });
+
+  it('does not win on a wrong-but-non-empty guess', () => {
+    const puzzle = generatePuzzle(7, 'easy');
+    const state = startHack(puzzle);
+    for (const idx of puzzle.missingIndices) {
+      submitToken(state, idx, 'ZZZ');
+    }
+    tickHack(state, 0.01);
+    expect(state.status).not.toBe('won');
   });
 
   it('loses if time runs out', () => {

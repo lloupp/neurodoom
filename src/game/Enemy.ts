@@ -2,7 +2,12 @@ import type { LevelData } from './Level';
 import type { Player } from './Player';
 import { deg2rad, normalizeAngle, clamp, angleDelta } from '../engine/types';
 
-export type EnemyState = 'PATROL' | 'ALERT' | 'CHASE' | 'ATTACK' | 'RETREAT' | 'DEAD';
+export type EnemyState = 'IDLE' | 'PATROL' | 'ALERT' | 'CHASE' | 'ATTACK' | 'RETREAT' | 'DEAD';
+
+export interface LootDrop {
+  position: { x: number; y: number };
+  kind: 'ammo' | 'medkit' | 'keycard';
+}
 
 export interface EnemySnapshot {
   id: number;
@@ -47,7 +52,7 @@ export class EnemySystem {
       hp: kind === 'drone' ? 30 : 70,
       position: { x, y },
       angle: 0,
-      state: 'PATROL',
+      state: 'IDLE',
       patrolPath: patrol.map(([px, py]) => ({ x: px + 0.5, y: py + 0.5 })),
       patrolIndex: 0,
       awareness: 0,
@@ -76,21 +81,29 @@ export class EnemySystem {
     }));
   }
 
-  damageAtTile(x: number, y: number, radius: number, amount: number, knockDir: number): EnemySnapshot[] {
+  damageAtTile(x: number, y: number, radius: number, amount: number, knockDir: number): { hits: EnemySnapshot[]; loot: LootDrop[] } {
     const hits: EnemySnapshot[] = [];
+    const loot: LootDrop[] = [];
     for (const e of this.enemies) {
       const dx = e.position.x - (x + 0.5);
       const dy = e.position.y - (y + 0.5);
       const r2 = radius * radius;
       if (dx * dx + dy * dy <= r2 && e.state !== 'DEAD') {
-        e.hp -= amount;
+        const armor = e.kind === 'heavy' ? 0.75 : 1; // heavies are armored, drones aren't
+        e.hp -= amount * armor;
         e.position.x += Math.cos(knockDir) * 0.06;
         e.position.y += Math.sin(knockDir) * 0.06;
-        if (e.hp <= 0) e.state = 'DEAD';
+        if (e.hp <= 0) {
+          e.state = 'DEAD';
+          loot.push({ position: { ...e.position }, kind: e.kind === 'heavy' ? 'ammo' : 'medkit' });
+        } else if (e.hp < (e.kind === 'drone' ? 30 : 70) * 0.25 && e.state !== 'RETREAT') {
+          e.state = 'RETREAT';
+          e.retreatUntil = 2.5;
+        }
         hits.push(this.snap(e));
       }
     }
-    return hits;
+    return { hits, loot };
   }
 
   private snap(e: InternalEnemy): EnemySnapshot {
@@ -114,6 +127,7 @@ export class EnemySystem {
       if (e.state === 'DEAD') continue;
       e.attackCooldown = Math.max(0, e.attackCooldown - dt);
       e.retreatUntil = Math.max(0, e.retreatUntil - dt);
+      e.stateSince += dt;
 
       // Awareness from line-of-sight
       const dx = player.position.x - e.position.x;
@@ -129,15 +143,24 @@ export class EnemySystem {
       const awarenessGain = (los && dist < 8 ? 0.7 : 0) + (footstepAudible ? 0.05 : 0) + (gunshotAudible ? 0.8 : 0);
       e.awareness = clamp(e.awareness + awarenessGain * dt - 0.05 * dt, 0, 1);
 
-      if (e.awareness > 0.6 && e.state !== 'CHASE' && e.state !== 'ATTACK') {
-        const prev = e.state;
-        e.state = 'CHASE';
-        e.spottedAt = this.timeTick;
-        callbacks.onAlertChanged?.(e);
-        void prev;
-      }
-      if (e.awareness < 0.2 && e.state === 'PATROL') {
-        e.state = 'PATROL';
+      const settled = e.state !== 'ATTACK' && e.state !== 'RETREAT';
+      if (settled) {
+        if (e.awareness > 0.6 && e.state !== 'CHASE') {
+          e.state = 'CHASE';
+          e.spottedAt = this.timeTick;
+          e.stateSince = 0;
+          callbacks.onAlertChanged?.(e);
+        } else if (e.awareness >= 0.3 && e.awareness <= 0.6 && e.state !== 'ALERT' && e.state !== 'CHASE') {
+          e.state = 'ALERT';
+          e.stateSince = 0;
+          callbacks.onAlertChanged?.(e);
+        } else if (e.awareness < 0.2 && (e.state === 'ALERT' || e.state === 'CHASE')) {
+          e.state = e.patrolPath.length > 0 ? 'PATROL' : 'IDLE';
+          e.stateSince = 0;
+        } else if (e.state === 'IDLE' && e.stateSince > 1.2) {
+          e.state = e.patrolPath.length > 0 ? 'PATROL' : 'IDLE';
+          e.stateSince = 0;
+        }
       }
 
       // Speed/behavior per state
@@ -145,6 +168,15 @@ export class EnemySystem {
       let speed = 0;
       let targetAngle = e.angle;
       switch (e.state) {
+        case 'IDLE': {
+          speed = 0;
+          break;
+        }
+        case 'ALERT': {
+          speed = 0;
+          targetAngle = Math.atan2(player.position.y - e.position.y, player.position.x - e.position.x);
+          break;
+        }
         case 'PATROL': {
           speed = baseSpeed * 0.6;
           const goal = e.patrolPath[e.patrolIndex];
@@ -209,8 +241,6 @@ export class EnemySystem {
           e.position.y = tryY;
         }
       }
-      // lose target if no awareness long enough
-      if (e.state === 'CHASE' && e.awareness < 0.2) e.state = 'PATROL';
     }
     void this;
   }

@@ -6,9 +6,10 @@
  * doesn't need that fidelity and the DOM is happiest at 30Hz.
  */
 
-import type { PlayerSnapshot } from './Player';
+import type { PlayerSnapshot, WeaponId } from './Player';
 import type { EnemySnapshot } from './Enemy';
 import type { TerminalState } from './Terminal';
+import { renderInventory } from './Inventory';
 
 export interface HUDRefs {
   hud: HTMLElement;
@@ -38,6 +39,7 @@ export class HUD {
   private lastPlayerTick = 0;
   private accum = 0;
   private currentPanel: HUDState['currentPanel'] = null;
+  onSelectWeapon?: (id: WeaponId) => void;
   private state: HUDState = {
     player: null,
     enemies: [],
@@ -150,6 +152,18 @@ export class HUD {
     if (this.currentPanel === 'terminal' && this.state.terminal) {
       this.renderTerminalPanel(this.state.terminal);
     }
+    // Inventory
+    if (this.currentPanel === 'inventory') {
+      this.renderInventoryPanel(p);
+    }
+  }
+
+  private renderInventoryPanel(p: PlayerSnapshot): void {
+    const grid = this.refs.panelInventory.querySelector<HTMLElement>('[data-inv-grid]')!;
+    const stamp = `${p.inventory.join(',')}|${p.weapon}`;
+    if (grid.dataset.idstamp === stamp) return;
+    grid.dataset.idstamp = stamp;
+    renderInventory(grid, { inventory: p.inventory, weapon: p.weapon });
   }
 
   private renderTerminalPanel(t: TerminalState): void {
@@ -174,11 +188,12 @@ export class HUD {
       const isMissing = puzzle.missingIndices.includes(i);
       lines.push(
         isMissing
-          ? `  ${String(i).padStart(2)}: ${(filled || '??').padEnd(4)}${isMissing ? (filled ? '' : ' <--') : ''}`
+          ? `  ${String(i).padStart(2)}: ${(filled || '??').padEnd(4)} // cipher: ${node.hint}${filled ? '' : ' <--'}`
           : `  ${String(i).padStart(2)}: ${node.text.padEnd(4)}`,
       );
     });
-    grid.textContent = `// missing segment:\n${lines.join('\n')}\n\n// tokens: ${puzzle.tokenBank.join(' ')}`;
+    grid.textContent =
+      `// missing segment — decode cipher (Caesar +1, e.g. NPW -> MOV):\n${lines.join('\n')}\n\n// tokens: ${puzzle.tokenBank.join(' ')}`;
     time.textContent = `${h.timeLeft.toFixed(1)}`;
     traces.textContent = `${h.tracesLeft}`;
   }
@@ -245,6 +260,12 @@ export class HUD {
     });
     this.refs.panelTerminal.querySelector('[data-act="logs"]')!.addEventListener('click', () => {
       this.currentPanel = 'logs';
+    });
+    // inventory weapon slots (click to equip)
+    this.refs.panelInventory.querySelector('[data-inv-grid]')!.addEventListener('click', (ev) => {
+      const slot = (ev.target as HTMLElement).closest<HTMLElement>('.weapon-slot');
+      const id = slot?.dataset.weapon as WeaponId | undefined;
+      if (id) this.onSelectWeapon?.(id);
     });
   }
 

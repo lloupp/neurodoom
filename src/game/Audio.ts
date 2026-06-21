@@ -2,6 +2,10 @@ import { AudioBus } from '../engine/Audio';
 import { synthBlip, synthNoiseBurst, synthAlarmPulse, synthFootstep, synthPulseRifle } from '../engine/Procedural';
 
 export class GameAudio {
+  private ambientGain: GainNode | null = null;
+  private tensionGain: GainNode | null = null;
+  private threat = 0;
+
   constructor(private readonly bus: AudioBus) {}
 
   /** Pre-bake SFX into the AudioBus cache. Must be called after AudioBus.init(). */
@@ -43,5 +47,45 @@ export class GameAudio {
     if (kind === 'beep')  this.bus.play('ui.beep', opts);
     if (kind === 'error') this.bus.play('ui.error', opts);
     if (kind === 'type')  this.bus.play('terminal.type', opts);
+  }
+
+  /** Low ambient drone (ambient bus) + a hidden tension layer (music bus) that
+   *  fades in as `world.threat` rises. Both routed through their category
+   *  gain nodes so master/category mixing and tab-hidden suspend still apply. */
+  startAmbient(): void {
+    const ctx = this.bus.ctxInstance();
+    if (!ctx || this.ambientGain) return;
+
+    const drone = ctx.createOscillator();
+    drone.type = 'sawtooth';
+    drone.frequency.value = 56;
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 320;
+    this.ambientGain = ctx.createGain();
+    this.ambientGain.gain.value = 0.0008;
+    drone.connect(lp).connect(this.ambientGain).connect(this.bus.gains.ambient ?? this.bus.master!);
+    drone.start();
+
+    const tension = ctx.createOscillator();
+    tension.type = 'sawtooth';
+    tension.frequency.value = 112;
+    const hp = ctx.createBiquadFilter();
+    hp.type = 'highpass';
+    hp.frequency.value = 600;
+    this.tensionGain = ctx.createGain();
+    this.tensionGain.gain.value = 0;
+    tension.connect(hp).connect(this.tensionGain).connect(this.bus.gains.music ?? this.bus.master!);
+    tension.start();
+  }
+
+  /** Adaptive layer: 0 = calm, 1 = full alert. Smoothly fades the tension bed in. */
+  setThreat(world_threat: number): void {
+    this.threat = Math.max(0, Math.min(1, world_threat));
+    const ctx = this.bus.ctxInstance();
+    if (!ctx || !this.ambientGain || !this.tensionGain) return;
+    const t = ctx.currentTime;
+    this.ambientGain.gain.setTargetAtTime(0.0008 + this.threat * 0.0014, t, 0.4);
+    this.tensionGain.gain.setTargetAtTime(this.threat * 0.012, t, 0.6);
   }
 }

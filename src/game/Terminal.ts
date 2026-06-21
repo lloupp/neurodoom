@@ -12,6 +12,22 @@ export interface TerminalLogEntry {
   played?: boolean;
 }
 
+export interface LogTag {
+  type: 'unlock' | 'lock' | 'spawn' | 'flag';
+  value: string;
+}
+
+/** Lexer: scans a transcript for `unlock:Door.A`, `spawn:Ghost.2`, `flag:story.shiva`-style tags. */
+export function parseTags(transcript: string): LogTag[] {
+  const tags: LogTag[] = [];
+  const re = /\b(unlock|lock|spawn|flag):([\w.]+)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(transcript))) {
+    tags.push({ type: m[1] as LogTag['type'], value: m[2]! });
+  }
+  return tags;
+}
+
 export interface TerminalState {
   id: string;
   label: string;
@@ -115,12 +131,19 @@ export class TerminalSystem {
     });
   }
 
-  open(id: string): boolean {
+  /** Opens the terminal and returns tags parsed from any not-yet-played log
+   *  (the caller applies unlock/spawn/flag effects, then they won't fire again). */
+  open(id: string): LogTag[] {
     const t = this.state.get(id);
-    if (!t) return false;
+    if (!t) return [];
     this.current = t;
     t.open = true;
-    return true;
+    const tags: LogTag[] = [];
+    for (const log of t.logs) {
+      if (!log.played) tags.push(...parseTags(log.transcript));
+      log.played = true;
+    }
+    return tags;
   }
 
   current_(): TerminalState | null { return this.current; }
@@ -145,6 +168,20 @@ export class TerminalSystem {
     if (row) {
       const next = row.split('');
       if (next[inter.x] === 'D') next[inter.x] = '.';
+      this.level.manifest.tiles[inter.y] = next.join('');
+    }
+    return true;
+  }
+
+  /** Inverse of unlockDoor: re-seals a door tile. */
+  lockDoor(id: string): boolean {
+    const inter = this.level.manifest.interactables.find((i) => i.id === id);
+    if (!inter || inter.kind !== 'door') return false;
+    inter.locked = true;
+    const row = this.level.manifest.tiles[inter.y];
+    if (row) {
+      const next = row.split('');
+      if (next[inter.x] === '.') next[inter.x] = 'D';
       this.level.manifest.tiles[inter.y] = next.join('');
     }
     return true;

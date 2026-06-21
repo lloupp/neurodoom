@@ -3,7 +3,8 @@
  *
  * The player sees three columns of "code tokens":
  *   - One column is a `<MISSING>` segment; they need to fill it
- *     with the correct pattern they deduce from hints.
+ *     with the correct token, deduced by decoding its hint (a
+ *     Caesar-shift-by-1 of the real token — e.g. hint "NPW" means "MOV").
  *   - Two columns are visible; the missing segment is the same shape
  *     modulo token translation.
  *
@@ -12,8 +13,8 @@
  *   - Normal: 6 tokens, 2 missing rows
  *   - Hard: 8 tokens, 3 missing rows
  *
- * Failure: triggers ALARM (calls callback.alarm()) which spawns a ghost
- *           in adjacent room.
+ * Failure: the caller (Game) is responsible for the consequence
+ *           (trace alarm + enemy spawn nearby) when status becomes 'lost'.
  */
 
 export interface HackNode {
@@ -28,10 +29,20 @@ export interface HackPuzzle {
   tokenBank: string[];
   /** The expected pattern. Tokens are compared positionally. */
   missingIndices: number[];
+  /** The real token for each missing index — deducible from its Caesar-shifted hint. */
+  solution: Record<number, string>;
   /** Trail pattern. */
   timeLimit: number;
   /** Number of allowed wrong-token insertions. */
   traces: number;
+}
+
+/** Caesar shift A-Z by `n` (wrapping); used to encode/decode hack hints. */
+function caesarShift(text: string, n: number): string {
+  return text.replace(/[A-Z]/g, (ch) => {
+    const code = ((ch.charCodeAt(0) - 65 + n) % 26 + 26) % 26;
+    return String.fromCharCode(65 + code);
+  });
 }
 
 export interface HackState {
@@ -78,23 +89,29 @@ export function generatePuzzle(seed: number, difficulty: 'easy' | 'normal' | 'ha
   const shuffledIndices = shuffle(Array.from({ length: size }, (_v, i) => i), rng);
   const missingIndices = shuffledIndices.slice(0, missingCount).sort((a, b) => a - b);
 
-  // Token pool: unique tokens, real code
-  const tokenSet = shuffle(TOKEN_BANK, rng).slice(0, size + 2);
+  // Token pool: unique tokens, real code — generated for every line (including
+  // missing ones), so each missing line has one definite correct answer.
+  const tokenSet = shuffle(TOKEN_BANK, rng).slice(0, size);
   const program: HackNode[] = [];
+  const solution: Record<number, string> = {};
   for (let i = 0; i < size; i++) {
+    const token = tokenSet[i] ?? 'NOP';
     if (missingIndices.includes(i)) {
-      program.push({ text: '???', hint: '[ MISSING_SEGMENT ]' });
+      solution[i] = token;
+      program.push({ text: '???', hint: caesarShift(token, 1) });
     } else {
-      const token = tokenSet.pop() ?? 'NOP';
       program.push({ text: token, hint: 'op' });
     }
   }
-  // Fill missing token choices — the solver picks one of the bank tokens
+  // Bank must contain every real solution so the player can pick it, plus filler.
+  const filler = shuffle(TOKEN_BANK.filter((t) => !tokenSet.includes(t)), rng);
+  const tokenBank = shuffle([...Object.values(solution), ...filler], rng).slice(0, Math.max(10, missingCount + 4));
   return {
     difficulty,
     program,
-    tokenBank: shuffle(TOKEN_BANK.slice(), rng).slice(0, 10),
+    tokenBank,
     missingIndices,
+    solution,
     timeLimit: timeLimits[difficulty],
     traces: tracePerLevel[difficulty],
   };
@@ -113,20 +130,13 @@ export function startHack(puzzle: HackPuzzle): HackState {
 
 export function submitToken(state: HackState, idx: number, token: string): { tracesLeft: number; correct: boolean } {
   if (state.status !== 'running') return { tracesLeft: state.tracesLeft, correct: false };
-  const expected = state.puzzle.program[idx]?.hint === 'op';
-  // Missing rows accept any token BUT the program demands a specific token.
-  // We use the *previous* (visible) tokens as hints to deduce which one.
-  // For this vertical slice we accept any non-empty token as correct, but
-  // each wrong guess costs a trace. Real game would parse TIS-style ports.
   state.userInput.set(idx, token);
   if (token.length === 0) return { tracesLeft: state.tracesLeft, correct: false };
-  // Mark correct on a successful non-empty match
-  const isAcceptable = !!token && /^[A-Z]{2,4}$/.test(token);
-  if (!isAcceptable) {
+  const isCorrect = token.toUpperCase() === state.puzzle.solution[idx];
+  if (!isCorrect) {
     state.tracesLeft = Math.max(0, state.tracesLeft - 1);
     return { tracesLeft: state.tracesLeft, correct: false };
   }
-  void expected;
   return { tracesLeft: state.tracesLeft, correct: true };
 }
 
@@ -135,7 +145,7 @@ export function tickHack(state: HackState, dt: number): HackState {
   state.timeLeft = Math.max(0, state.timeLeft - dt);
   if (state.timeLeft <= 0 || state.tracesLeft <= 0) {
     state.status = 'lost';
-  } else if (state.puzzle.missingIndices.every((i) => (state.userInput.get(i) ?? '').length > 0)) {
+  } else if (state.puzzle.missingIndices.every((i) => state.userInput.get(i) === state.puzzle.solution[i])) {
     state.status = 'won';
   }
   return state;

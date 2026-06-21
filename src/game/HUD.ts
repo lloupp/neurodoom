@@ -72,9 +72,10 @@ export class HUD {
   private refresh(): void {
     const p = this.state.player;
     if (!p) {
-      (this.refs.hud as HTMLElement).hidden = false;
+      (this.refs.hud as HTMLElement).hidden = true;
       return;
     }
+    (this.refs.hud as HTMLElement).hidden = false;
 
     // Vitals
     const hpEl  = this.refs.hud.querySelector<HTMLElement>('[data-display="hp"]')!;

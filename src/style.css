@@ -260,6 +260,7 @@ canvas {
   background: radial-gradient(circle at center, rgba(75, 227, 255, 0.06), transparent 70%), var(--bg-0);
   pointer-events: auto; z-index: 30;
 }
+#boot[hidden] { display: none; }
 #boot h1 {
   font-size: clamp(48px, 8vw, 96px);
   letter-spacing: 0.2em;

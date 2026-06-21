@@ -175,8 +175,8 @@ export class Player {
     // Apply rotation to movement vector
     const cosA = Math.cos(this.angle);
     const sinA = Math.sin(this.angle);
-    const wx = (mx * cosA - my * sinA) * speed * dt;
-    const wy = (mx * sinA + my * cosA) * speed * dt;
+    const wx = (my * cosA - mx * sinA) * speed * dt;
+    const wy = (my * sinA + mx * cosA) * speed * dt;
 
     const before = { ...this.position };
     const moved = tryMove(tiles, cell, this.position.x, this.position.y, wx, wy, this.radius);

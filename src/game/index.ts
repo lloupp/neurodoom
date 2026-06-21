@@ -124,6 +124,12 @@ export class Game {
     this.enemySystem = new EnemySystem(loaded, this.player);
     for (const e of rec.manifest.enemies) this.enemySystem.spawn(e.kind, e.x + 0.5, e.y + 0.5, e.patrol);
     this.terminalSystem = new TerminalSystem(loaded, items, this.flags);
+    // Doors that aren't gated by a flag are open from the start — only the
+    // tile char (not the interactable's `locked` flag) governs collision,
+    // so they must be carved out of the grid here.
+    for (const inter of rec.manifest.interactables) {
+      if (inter.kind === 'door' && !inter.locked) this.terminalSystem.unlockDoor(inter.id);
+    }
     return true;
   }
 

@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { loadLevel } from '../src/engine/LevelLoader';
-import { collidesAt } from '../src/game/Level';
+import { collidesAt, surfaceAt } from '../src/game/Level';
 import { TerminalSystem, parseTags } from '../src/game/Terminal';
-import { EnemySystem } from '../src/game/Enemy';
+import { EnemySystem, lightLevelAt } from '../src/game/Enemy';
 import { Player } from '../src/game/Player';
 import level1 from '../src/game/levels/Level1';
 
@@ -123,5 +123,45 @@ describe('Inventory reorder (drag-drop, SPEC 4.5)', () => {
     player.reorderInventory(1, 1);
     player.reorderInventory(5, 0);
     expect(player.snapshot().inventory).toEqual(['alpha', 'beta']);
+  });
+});
+
+describe('Light-modulated vision cones (SPEC 4.4)', () => {
+  it('an emissive screen tile lights nearby floor brighter than the ambient gloom', () => {
+    const loaded = loadLevel(level1);
+    const { tiles, cellSize } = loaded.manifest;
+    // (29.5, 6.5) sits beside the screen tile placed at (30, 6).
+    const lit = lightLevelAt(tiles, cellSize, 29.5, 6.5);
+    // (2.5, 17.5) is far from every screen tile in the level.
+    const dark = lightLevelAt(tiles, cellSize, 2.5, 17.5);
+    expect(lit).toBeGreaterThan(dark);
+    expect(dark).toBeCloseTo(0.35, 5);
+  });
+
+  it('an enemy spots a player lurking in the dark slower than one standing in the light', () => {
+    const loaded = loadLevel(level1);
+
+    const litPlayer = new Player({ x: 29.5, y: 6.5, face: 0 });
+    const litEnemies = new EnemySystem(loaded, litPlayer);
+    const litId = litEnemies.spawn('drone', 28.5, 6.5, []);
+    for (let i = 0; i < 10; i++) litEnemies.update(1 / 30, {});
+    const litAwareness = litEnemies.snapshots().find((e) => e.id === litId)!.awareness;
+
+    const darkPlayer = new Player({ x: 24.5, y: 9.5, face: 0 });
+    const darkEnemies = new EnemySystem(loaded, darkPlayer);
+    const darkId = darkEnemies.spawn('drone', 23.5, 9.5, []);
+    for (let i = 0; i < 10; i++) darkEnemies.update(1 / 30, {});
+    const darkAwareness = darkEnemies.snapshots().find((e) => e.id === darkId)!.awareness;
+
+    expect(litAwareness).toBeGreaterThan(darkAwareness);
+  });
+});
+
+describe('Surface-based footstep palette (SPEC 4.2)', () => {
+  it('reads metal grating and organic floor tiles distinctly from plain concrete', () => {
+    const { tiles, cellSize } = loadLevel(level1).manifest;
+    expect(surfaceAt(tiles, cellSize, 24.5, 9.5)).toBe('metal');
+    expect(surfaceAt(tiles, cellSize, 26.5, 9.5)).toBe('organic');
+    expect(surfaceAt(tiles, cellSize, 2.5, 2.5)).toBe('concrete');
   });
 });

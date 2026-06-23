@@ -14,6 +14,7 @@ import { MapRenderer } from './MapRenderer';
 import { SpriteRenderer, type SpriteRef } from './SpriteRenderer';
 import { Player, WEAPONS, type WeaponId } from './Player';
 import { EnemySystem, type LootDrop } from './Enemy';
+import { surfaceAt } from './Level';
 import { TerminalSystem, type LogTag } from './Terminal';
 import type { MapTrigger } from './MapSchema';
 import { HUD, type HUDRefs } from './HUD';
@@ -468,7 +469,11 @@ export class Game {
 
   private handleStep(amp: number): void {
     if (amp < 0.1) return;
-    this.gameAudio.playStep({ x: this.player.position.x, y: this.player.position.y, z: 0 });
+    const manifest = this.levelState.data?.manifest;
+    const surface = manifest
+      ? surfaceAt(manifest.tiles, manifest.cellSize, this.player.position.x, this.player.position.y)
+      : 'concrete';
+    this.gameAudio.playStep({ x: this.player.position.x, y: this.player.position.y, z: 0 }, surface);
   }
 
   private render(alpha: number, t: number): void {

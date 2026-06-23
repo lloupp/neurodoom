@@ -9,6 +9,26 @@ export interface LootDrop {
   kind: 'ammo' | 'medkit' | 'keycard' | 'credits';
 }
 
+/** Ambient + emissive-screen light at a world position (SPEC 4.4: light-modulated
+ *  vision cones). Floors near an 'S' (emissive screen) wall tile are brightly lit;
+ *  far from any screen, ambient gloom dominates and enemies are slower to spot
+ *  a player moving through it. Returns 0.25 (dark) .. 1 (lit). */
+export function lightLevelAt(tiles: string[], cell: number, x: number, y: number): number {
+  const tx = Math.floor(x / cell);
+  const ty = Math.floor(y / cell);
+  const radius = 5;
+  let light = 0.35; // ambient gloom floor
+  for (let dy = -radius; dy <= radius; dy++) {
+    for (let dx = -radius; dx <= radius; dx++) {
+      if (tiles[ty + dy]?.[tx + dx] === 'S') {
+        const dist = Math.hypot(dx, dy);
+        light += Math.max(0, 1 - dist / radius) * 0.6;
+      }
+    }
+  }
+  return clamp(light, 0.25, 1);
+}
+
 export interface EnemySnapshot {
   id: number;
   position: { x: number; y: number };
@@ -145,7 +165,11 @@ export class EnemySystem {
       const gunshotAudible =
         dist < (distSq > 0 ? 8 : 0) + 4 * (player.weapon === 'shotgun' ? 1 : 0);
 
-      const awarenessGain = (los && dist < 8 ? 0.7 : 0) + (footstepAudible ? 0.05 : 0) + (gunshotAudible ? 0.8 : 0);
+      // Light-modulated vision (SPEC 4.4): the LOS gain is scaled by how lit the
+      // player's tile is, so a player lurking away from emissive screens is
+      // harder to spot even in plain sight.
+      const light = los ? lightLevelAt(level.manifest.tiles, level.manifest.cellSize, player.position.x, player.position.y) : 1;
+      const awarenessGain = (los && dist < 8 ? 0.7 * light : 0) + (footstepAudible ? 0.05 : 0) + (gunshotAudible ? 0.8 : 0);
       e.awareness = clamp(e.awareness + awarenessGain * dt - 0.05 * dt, 0, 1);
 
       const settled = e.state !== 'ATTACK' && e.state !== 'RETREAT';

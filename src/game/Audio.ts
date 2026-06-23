@@ -15,7 +15,9 @@ export class GameAudio {
     this.bus.synth('sfx.pistol', (c) => synthBlip(c, 480, 0.06, 'square'));
     this.bus.synth('sfx.shotgun', (c) => synthNoiseBurst(c, 0.22));
     this.bus.synth('sfx.pulse_rifle', (c) => synthPulseRifle(c));
-    this.bus.synth('sfx.footstep', (c) => synthFootstep(c));
+    this.bus.synth('sfx.footstep.concrete', (c) => synthFootstep(c, 'concrete'));
+    this.bus.synth('sfx.footstep.metal', (c) => synthFootstep(c, 'metal'));
+    this.bus.synth('sfx.footstep.organic', (c) => synthFootstep(c, 'organic'));
     this.bus.synth('sfx.alarm', (c) => synthAlarmPulse(c));
     this.bus.synth('sfx.hit', (c) => synthBlip(c, 220, 0.12, 'sawtooth'));
     this.bus.synth('ui.beep', (c) => synthBlip(c, 880, 0.05, 'sine'));
@@ -39,8 +41,9 @@ export class GameAudio {
     else                              this.bus.play('sfx.pistol', opts);
   }
 
-  playStep(pos: { x: number; y: number; z: number }): void {
-    this.bus.play('sfx.footstep', { category: 'sfx', position: pos, volume: 0.2 });
+  /** SPEC 4.2 — step audio palette by surface; defaults to concrete. */
+  playStep(pos: { x: number; y: number; z: number }, surface: 'concrete' | 'metal' | 'organic' = 'concrete'): void {
+    this.bus.play(`sfx.footstep.${surface}`, { category: 'sfx', position: pos, volume: 0.2 });
   }
 
   playHit(pos: { x: number; y: number; z: number }): void {

@@ -53,6 +53,8 @@ export interface MapManifest {
     *  C = concrete solid
     *  O = organic (biological hazard)
     *  D = door tile (rendered as wall + interactable)
+    *  g = metal grating floor (walkable; SPEC 4.2 footstep palette)
+    *  w = organic floor (walkable; SPEC 4.2 footstep palette)
     */
   tiles: string[];
   /** Tile side length in world units (1 world unit = 1 tile) */

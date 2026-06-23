@@ -21,6 +21,15 @@ export class GameAudio {
     this.bus.synth('ui.beep', (c) => synthBlip(c, 880, 0.05, 'sine'));
     this.bus.synth('ui.error', (c) => synthBlip(c, 120, 0.18, 'square'));
     this.bus.synth('terminal.type', (c) => synthBlip(c, 1500, 0.025, 'square'));
+    // Audio-log transmission: a degraded static "voice" burst on the voice bus.
+    // SPEC 4.7 — logs are *heard* on approach, not just read. Routed through the
+    // voice category so it follows the voice mix and tab-hidden suspend.
+    this.bus.synth('voice.log', (c) => synthNoiseBurst(c, 0.9));
+  }
+
+  /** Plays an audio-log transmission on the voice bus (SPEC 4.7 — logs play on approach). */
+  playLog(pos: { x: number; y: number; z: number } | null = null): void {
+    this.bus.play('voice.log', { category: 'voice', position: pos, volume: 0.5 });
   }
 
   playFire(weapon: 'pistol' | 'shotgun' | 'pulse_rifle', pos: { x: number; y: number; z: number }): void {

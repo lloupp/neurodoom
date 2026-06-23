@@ -274,6 +274,9 @@ export class Game {
           } else {
             const tags = this.terminalSystem.open(target.id);
             this.applyLogTags(tags);
+            // Logs are heard, not just read (SPEC 4.7): play the transmission
+            // from the interactable's world position so HRTF places it in space.
+            this.gameAudio.playLog({ x: inter.x + 0.5, y: inter.y + 0.5, z: 0 });
             this.hud.setPanel('terminal');
           }
         }
@@ -409,7 +412,10 @@ export class Game {
       }
       case 'play_log': {
         const id = data.id;
-        if (typeof id === 'string') this.applyLogTags(this.terminalSystem.open(id));
+        if (typeof id === 'string') {
+          this.applyLogTags(this.terminalSystem.open(id));
+          this.gameAudio.playLog({ x: trig.x + 0.5, y: trig.y + 0.5, z: 0 });
+        }
         break;
       }
       case 'teleport': {

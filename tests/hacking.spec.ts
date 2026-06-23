@@ -2,13 +2,21 @@ import { describe, it, expect } from 'vitest';
 import { generatePuzzle, startHack, tickHack, submitToken } from '../src/game/Hacking';
 
 describe('Hacking - vertical slice', () => {
-  it('generates puzzles with the requested difficulty', () => {
+  it('generates 3-line puzzles with the requested difficulty', () => {
     const easy = generatePuzzle(1234, 'easy');
     expect(easy.missingIndices.length).toBe(1);
-    expect(easy.program.length).toBe(4);
+    expect(easy.lineWidth).toBe(2);
+    expect(easy.program.length).toBe(6);   // 3 lines x 2 tokens
     const normal = generatePuzzle(1234, 'normal');
     expect(normal.missingIndices.length).toBe(2);
-    expect(normal.program.length).toBe(6);
+    expect(normal.lineWidth).toBe(3);
+    expect(normal.program.length).toBe(9); // 3 lines x 3 tokens
+  });
+
+  it('grants three seconds of tolerance per token', () => {
+    const hard = generatePuzzle(1234, 'hard');
+    expect(hard.program.length).toBe(12);  // 3 lines x 4 tokens
+    expect(hard.timeLimit).toBe(36);       // 3s x 12 tokens
   });
 
   it('completion wins only when missing slots are filled with the real (cipher-deduced) solution', () => {

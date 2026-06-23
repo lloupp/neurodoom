@@ -50,6 +50,7 @@ export class AssetLoader {
         this.makeItemSprite('#ffb048', 'MED'),
         this.makeItemSprite('#aaff39', 'AMO'),
         this.makeItemSprite('#ff3aa1', 'DAT'),
+        this.makeItemSprite('#ffe24b', 'CRD'),
       ],
     };
   }

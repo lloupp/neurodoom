@@ -118,6 +118,21 @@ export class Player {
     this.inventory.delete(item);
   }
 
+  addCredits(n: number): void {
+    this.stats.credits += n;
+  }
+
+  /** Reorders the hot inventory (drag-drop, SPEC 4.5). Set preserves insertion
+   *  order, so we rebuild it in place with the item moved from `from` to `to`. */
+  reorderInventory(from: number, to: number): void {
+    const list = Array.from(this.inventory);
+    if (from < 0 || from >= list.length || to < 0 || to >= list.length || from === to) return;
+    const [moved] = list.splice(from, 1);
+    list.splice(to, 0, moved!);
+    this.inventory.clear();
+    for (const it of list) this.inventory.add(it);
+  }
+
   damage(dmg: number): boolean {  // returns fatal
     this.stats.hp = Math.max(0, this.stats.hp - dmg);
     return this.stats.hp <= 0;

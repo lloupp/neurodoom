@@ -89,6 +89,7 @@ export class Game {
     };
     this.hud = new HUD(hudRefs);
     this.hud.onSelectWeapon = (id) => this.player.setWeapon(id);
+    this.hud.onReorderInventory = (from, to) => this.player.reorderInventory(from, to);
 
     window.addEventListener('resize', () => {
       this.renderer.resize();
@@ -296,6 +297,11 @@ export class Game {
           this.gameAudio.playUi('beep');
           this.flagsCleanup(inter);
         }
+        if (inter?.kind === 'credits') {
+          this.player.addCredits(25);
+          this.gameAudio.playUi('beep');
+          this.flagsCleanup(inter);
+        }
       }
     }
 
@@ -357,7 +363,10 @@ export class Game {
       kind: drop.kind,
       x: Math.floor(drop.position.x),
       y: Math.floor(drop.position.y),
-      prompt: drop.kind === 'ammo' ? 'Salvaged ammo' : drop.kind === 'medkit' ? 'Salvaged medkit' : 'Salvaged keycard',
+      prompt: drop.kind === 'ammo' ? 'Salvaged ammo'
+        : drop.kind === 'medkit' ? 'Salvaged medkit'
+        : drop.kind === 'credits' ? 'Salvaged credits'
+        : 'Salvaged keycard',
     });
   }
 
@@ -511,6 +520,7 @@ export class Game {
         if (inter.kind === 'medkit')    spriteIndex = 1;
         if (inter.kind === 'ammo')      spriteIndex = 2;
         if (inter.kind === 'keycard')   spriteIndex = 3;
+        if (inter.kind === 'credits')   spriteIndex = 4;
         if (spriteIndex >= 0) {
           const dx = inter.x + 0.5 - this.player.position.x;
           const dy = inter.y + 0.5 - this.player.position.y;

@@ -89,7 +89,39 @@ describe('Enemy behavior tree (real IDLE/ALERT/CHASE/RETREAT transitions)', () =
 
     const killing = enemies.damageAtTile(10, 4, 1, 25, 0);
     expect(killing.hits.find((h) => h.id === id)!.state).toBe('DEAD');
-    expect(killing.loot).toEqual([{ position: expect.anything(), kind: 'medkit' }]);
+    // Drones drop a medkit + credits (SPEC 4.4); heavies would also drop a keycard.
+    expect(killing.loot.map((l) => l.kind).sort()).toEqual(['credits', 'medkit']);
     expect(enemies.alive()).toBe(0);
+  });
+
+  it('a heavy drops ammo + credits + keycard on death (SPEC 4.4)', () => {
+    const loaded = loadLevel(level1);
+    const player = new Player({ x: 0.5, y: 0.5, face: 0 });
+    const enemies = new EnemySystem(loaded, player);
+    const id = enemies.spawn('heavy', 10.5, 4.5, []);
+    const killing = enemies.damageAtTile(10, 4, 1, 999, 0);
+    expect(killing.hits.find((h) => h.id === id)!.state).toBe('DEAD');
+    expect(killing.loot.map((l) => l.kind).sort()).toEqual(['ammo', 'credits', 'keycard']);
+  });
+});
+
+describe('Inventory reorder (drag-drop, SPEC 4.5)', () => {
+  it('moves an item from one hot slot to another, preserving the rest', () => {
+    const player = new Player({ x: 0.5, y: 0.5, face: 0 });
+    player.addInventory('alpha');
+    player.addInventory('beta');
+    player.addInventory('gamma');
+    expect(player.snapshot().inventory).toEqual(['alpha', 'beta', 'gamma']);
+    player.reorderInventory(0, 2); // move alpha to the end
+    expect(player.snapshot().inventory).toEqual(['beta', 'gamma', 'alpha']);
+  });
+
+  it('ignores out-of-range or no-op moves', () => {
+    const player = new Player({ x: 0.5, y: 0.5, face: 0 });
+    player.addInventory('alpha');
+    player.addInventory('beta');
+    player.reorderInventory(1, 1);
+    player.reorderInventory(5, 0);
+    expect(player.snapshot().inventory).toEqual(['alpha', 'beta']);
   });
 });

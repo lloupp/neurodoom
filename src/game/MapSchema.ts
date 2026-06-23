@@ -12,7 +12,7 @@ export interface MapTrigger {
 
 export interface MapInteractable {
   id: string;
-  kind: 'door' | 'terminal' | 'panel' | 'keycard' | 'medkit' | 'ammo' | 'audio_log';
+  kind: 'door' | 'terminal' | 'panel' | 'keycard' | 'medkit' | 'ammo' | 'audio_log' | 'credits';
   x: number; y: number;        // tile coords
   /** Door/terminal direction (0=east, 90=north, 180=west, 270=south) */
   face?: number;

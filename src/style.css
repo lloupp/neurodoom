@@ -251,6 +251,11 @@ canvas {
   font-family: var(--font-mono); font-size: 11px;
   text-align: center;
 }
+#panel-inventory [data-inv-grid] .slot.filled { cursor: grab; background: rgba(75, 227, 255, 0.12); }
+#panel-inventory [data-inv-grid] .slot.filled:active { cursor: grabbing; }
+#panel-inventory [data-inv-grid] .slot.weapon-slot { cursor: pointer; border-color: var(--neon-toxic); }
+#panel-inventory [data-inv-grid] .slot.weapon-slot.active { background: rgba(170, 255, 57, 0.18); box-shadow: 0 0 10px rgba(170, 255, 57, 0.4); }
+#panel-inventory [data-inv-grid] .slot.reserved { opacity: 0.35; cursor: default; }
 
 /* === Boot screen === */
 #boot {

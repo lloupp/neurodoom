@@ -1,21 +1,27 @@
 /**
- * Hacking minigame — TIS-100-inspired.
+ * Hacking minigame — TIS-100-inspired (SPEC 4.6).
  *
- * The player sees three columns of "code tokens":
- *   - One column is a `<MISSING>` segment; they need to fill it
+ * The player sees THREE lines of "code tokens" (see `lineWidth`):
+ *   - Some tokens are `???` missing segments; they need to fill them
  *     with the correct token, deduced by decoding its hint (a
  *     Caesar-shift-by-1 of the real token — e.g. hint "NPW" means "MOV").
- *   - Two columns are visible; the missing segment is the same shape
- *     modulo token translation.
+ *   - The rest are visible.
  *
- * Difficulty scales:
- *   - Easy: 4 tokens, 1 missing row
- *   - Normal: 6 tokens, 2 missing rows
- *   - Hard: 8 tokens, 3 missing rows
+ * Difficulty scales (3 lines always; `lineWidth` tokens per line):
+ *   - Easy:   2/line (6 tokens), 1 missing
+ *   - Normal: 3/line (9 tokens), 2 missing
+ *   - Hard:   4/line (12 tokens), 3 missing
+ *
+ * Time budget is 3 seconds per token ("three seconds-per-token tolerance").
  *
  * Failure: the caller (Game) is responsible for the consequence
  *           (trace alarm + enemy spawn nearby) when status becomes 'lost'.
  */
+
+/** Every puzzle is laid out as this many lines (SPEC 4.6: "three lines"). */
+export const HACK_LINES = 3;
+/** Seconds of time budget granted per token in the program (SPEC 4.6). */
+export const HACK_SECONDS_PER_TOKEN = 3;
 
 export interface HackNode {
   text: string;
@@ -25,6 +31,8 @@ export interface HackNode {
 export interface HackPuzzle {
   difficulty: 'easy' | 'normal' | 'hard';
   program: HackNode[];
+  /** Tokens per line; the program is `HACK_LINES * lineWidth` tokens (SPEC 4.6). */
+  lineWidth: number;
   /** Tokens to choose from to fill missing rows. */
   tokenBank: string[];
   /** The expected pattern. Tokens are compared positionally. */
@@ -77,13 +85,16 @@ function shuffle<T>(arr: T[], rng: () => number): T[] {
 
 export function generatePuzzle(seed: number, difficulty: 'easy' | 'normal' | 'hard' = 'normal'): HackPuzzle {
   const rng = rand(seed);
-  const sizes = { easy: 4, normal: 6, hard: 8 };
+  // 3 lines always; difficulty sets tokens-per-line (SPEC 4.6).
+  const lineWidths = { easy: 2, normal: 3, hard: 4 };
   const missingPerLevel = { easy: 1, normal: 2, hard: 3 };
   const tracePerLevel = { easy: 5, normal: 3, hard: 2 };
-  const timeLimits = { easy: 45, normal: 30, hard: 22 };
 
-  const size = sizes[difficulty];
+  const lineWidth = lineWidths[difficulty];
+  const size = HACK_LINES * lineWidth;
   const missingCount = missingPerLevel[difficulty];
+  // 3 seconds of tolerance per token in the program.
+  const timeLimit = HACK_SECONDS_PER_TOKEN * size;
 
   // Pick missing indices distributed across the program
   const shuffledIndices = shuffle(Array.from({ length: size }, (_v, i) => i), rng);
@@ -109,10 +120,11 @@ export function generatePuzzle(seed: number, difficulty: 'easy' | 'normal' | 'ha
   return {
     difficulty,
     program,
+    lineWidth,
     tokenBank,
     missingIndices,
     solution,
-    timeLimit: timeLimits[difficulty],
+    timeLimit,
     traces: tracePerLevel[difficulty],
   };
 }

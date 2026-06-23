@@ -6,7 +6,7 @@ export type EnemyState = 'IDLE' | 'PATROL' | 'ALERT' | 'CHASE' | 'ATTACK' | 'RET
 
 export interface LootDrop {
   position: { x: number; y: number };
-  kind: 'ammo' | 'medkit' | 'keycard';
+  kind: 'ammo' | 'medkit' | 'keycard' | 'credits';
 }
 
 export interface EnemySnapshot {
@@ -95,7 +95,12 @@ export class EnemySystem {
         e.position.y += Math.sin(knockDir) * 0.06;
         if (e.hp <= 0) {
           e.state = 'DEAD';
-          loot.push({ position: { ...e.position }, kind: e.kind === 'heavy' ? 'ammo' : 'medkit' });
+          // Loot on death (SPEC 4.4): credits always; ammo from armored heavies,
+          // medkits from drones; heavies also carry a keycard.
+          const pos = { ...e.position };
+          loot.push({ position: { ...pos }, kind: e.kind === 'heavy' ? 'ammo' : 'medkit' });
+          loot.push({ position: { ...pos }, kind: 'credits' });
+          if (e.kind === 'heavy') loot.push({ position: { ...pos }, kind: 'keycard' });
         } else if (e.hp < (e.kind === 'drone' ? 30 : 70) * 0.25 && e.state !== 'RETREAT') {
           e.state = 'RETREAT';
           e.retreatUntil = 2.5;

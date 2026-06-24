@@ -10,6 +10,8 @@
 
 import { Input, AudioBus, GameShell, AssetLoader, cell } from '../engine';
 import { loadLevel } from '../engine/LevelLoader';
+import { loadSettings, saveSettings, DIFFICULTY_DAMAGE_TAKEN, type GameSettings, type Difficulty } from '../engine/Settings';
+import type { RemappableAction } from '../engine/Input';
 import { MapRenderer } from './MapRenderer';
 import { SpriteRenderer, type SpriteRef } from './SpriteRenderer';
 import { Player, WEAPONS, type WeaponId, type WeaponDef } from './Player';
@@ -19,7 +21,7 @@ import { TerminalSystem, type LogTag } from './Terminal';
 import type { MapTrigger } from './MapSchema';
 import { HUD, type HUDRefs } from './HUD';
 import { GameAudio } from './Audio';
-import { generatePuzzle, startHack, tickHack, submitToken, describeProgram } from './Hacking';
+import { generatePuzzle, startHack, tickHack } from './Hacking';
 import { writeSlot, readSlot, SAVE_SLOT } from '../engine/Persistence';
 import { listLevels, findLevel } from './levels/registry';
 
@@ -41,11 +43,13 @@ export interface GameRefs {
   hud: HTMLElement;
   boot: HTMLElement;
   dead: HTMLElement;
+  win: HTMLElement;
   prompt: HTMLElement;
   panelTerminal: HTMLElement;
   panelHack: HTMLElement;
   panelLogs: HTMLElement;
   panelInventory: HTMLElement;
+  panelMenu: HTMLElement;
 }
 
 export class Game {
@@ -69,9 +73,11 @@ export class Game {
   private firedTriggers = new Set<string>();
   isPaused = false;
   deathAt = 0;
+  hasWon = false;
   weaponIndex = 0;
   weaponOrder: WeaponId[] = ['pistol', 'shotgun', 'pulse_rifle', 'rocket_launcher'];
   private projectiles: Projectile[] = [];
+  settings: GameSettings = loadSettings();
 
   // reactive cells for HUD refresh
   private readonly ammoCell = cell<{ name: string; clip: number; reserve: number }>({ name: '—', clip: 0, reserve: 0 });
@@ -93,15 +99,20 @@ export class Game {
       hud: refs.hud,
       boot: refs.boot,
       dead: refs.dead,
+      win: refs.win,
       prompt: refs.prompt,
       panelTerminal: refs.panelTerminal,
       panelHack: refs.panelHack,
       panelLogs: refs.panelLogs,
       panelInventory: refs.panelInventory,
+      panelMenu: refs.panelMenu,
     };
     this.hud = new HUD(hudRefs);
     this.hud.onSelectWeapon = (id) => this.player.setWeapon(id);
     this.hud.onReorderInventory = (from, to) => this.player.reorderInventory(from, to);
+    this.hud.populateMenu(this.settings, this.input.getBindings());
+    this.applySettings();
+    this.wireMenuCallbacks();
 
     window.addEventListener('resize', () => {
       this.renderer.resize();
@@ -113,7 +124,94 @@ export class Game {
     });
   }
 
+  /** Pushes current settings into the live systems that own the actual
+   *  knobs (AudioBus gain nodes, Player sensitivity, EnemySystem difficulty). */
+  private applySettings(): void {
+    this.audio.setMasterGain(this.settings.masterVolume);
+    this.audio.setCategoryGain('sfx', this.settings.sfxVolume);
+    this.audio.setCategoryGain('voice', this.settings.voiceVolume);
+    this.audio.setCategoryGain('ambient', this.settings.ambientVolume);
+    this.audio.setCategoryGain('music', this.settings.musicVolume);
+    this.player.setSensitivity(this.settings.sensitivity);
+    this.enemySystem?.setDamageMultiplier(DIFFICULTY_DAMAGE_TAKEN[this.settings.difficulty]);
+  }
+
+  private wireMenuCallbacks(): void {
+    this.hud.onSetVolume = (cat, v) => {
+      if (cat === 'master') this.settings.masterVolume = v;
+      else if (cat === 'sfx') this.settings.sfxVolume = v;
+      else if (cat === 'voice') this.settings.voiceVolume = v;
+      else if (cat === 'ambient') this.settings.ambientVolume = v;
+      else this.settings.musicVolume = v;
+      this.applySettings();
+      saveSettings(this.settings);
+    };
+    this.hud.onSetSensitivity = (v) => {
+      this.settings.sensitivity = v;
+      this.applySettings();
+      saveSettings(this.settings);
+    };
+    this.hud.onSetDifficulty = (d: Difficulty) => {
+      this.settings.difficulty = d;
+      this.applySettings();
+      saveSettings(this.settings);
+    };
+    this.hud.onSetReduceMotion = (v) => {
+      this.settings.reduceMotion = v;
+      saveSettings(this.settings);
+    };
+    this.hud.onRebindKey = (action: RemappableAction, key: string) => {
+      this.input.setBinding(action, key);
+    };
+    this.hud.onResume = () => {
+      this.isPaused = false;
+      this.hud.setPanel(null);
+      this.input.requestPointerLock();
+    };
+    this.hud.onMainMenu = () => {
+      // Stay paused — the boot screen sits on top while the shell loop is
+      // stopped outright, so no gameplay/AI ticks behind the main menu.
+      this.shell.stop();
+      this.hud.setPanel(null);
+      this.input.exitPointerLock();
+      void this.beginWithMenu();
+    };
+    this.hud.onExportSave = () => this.exportSave();
+    this.hud.onImportSave = (file) => void this.importSave(file);
+  }
+
+  private exportSave(): void {
+    const snap = {
+      ...this.player.snapshot(),
+      flags: [...this.flags],
+      level: this.levelState.data!.manifest.id,
+      time: this.playTimeMs,
+    };
+    const blob = new Blob([JSON.stringify({ schema_version: 1, saved_at: Date.now(), data: snap }, null, 2)], {
+      type: 'application/json',
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `neurodoom-save-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  private async importSave(file: File): Promise<void> {
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text) as { data: unknown };
+      await writeSlot(SAVE_SLOT, parsed.data, this.playTimeMs);
+      await this.load();
+    } catch {
+      // Malformed/foreign file — ignore rather than crash the session.
+    }
+  }
+
   begin(): void {
+    this.hasWon = false;
+    this.refs.win.hidden = true;
     this.loadLevelById('sublevel_3');
     this.shell.start({
       update: (dt, t) => this.update(dt, t),
@@ -143,6 +241,7 @@ export class Game {
       })
       .flat();
     this.enemySystem = new EnemySystem(loaded, this.player);
+    this.enemySystem.setDamageMultiplier(DIFFICULTY_DAMAGE_TAKEN[this.settings.difficulty]);
     for (const e of rec.manifest.enemies) this.enemySystem.spawn(e.kind, e.x + 0.5, e.y + 0.5, e.patrol);
     this.terminalSystem = new TerminalSystem(loaded, items, this.flags);
     // Doors that aren't gated by a flag are open from the start — only the
@@ -157,23 +256,25 @@ export class Game {
   }
 
   private update(dt: number, t: number): void {
+    // Consumed even while paused so Esc can unpause (edge flags would
+    // otherwise never be cleared and the player would be stuck in the menu).
+    const rawInput = this.input.consume();
+    if (rawInput.pause) {
+      this.isPaused = !this.isPaused;
+      this.hud.setPanel(this.isPaused ? 'menu' : null);
+      if (this.isPaused) this.input.exitPointerLock();
+      else this.input.requestPointerLock();
+    }
     if (this.isPaused) return;
     if (this.player.stats.hp <= 0) {
       this.deathAt += dt;
-      if (this.deathAt > 2 && !this.refs.dead.hidden) {
-        // already shown
-      }
-      // outside the game-shell render we still want the HUD shell to tick for the death screen
+      // Release the cursor so the death screen's buttons are actually clickable —
+      // pointer lock otherwise keeps targeting the (now hidden-behind-overlay) canvas.
+      this.input.exitPointerLock();
       return;
     }
     this.playTimeMs += dt * 1000;
 
-    const rawInput = this.input.consume();
-    // Pause / inventory toggle
-    if (rawInput.pause) {
-      this.isPaused = !this.isPaused;
-      this.hud.setPanel(this.isPaused ? 'menu' : null);
-    }
     if (rawInput.inventoryToggle && !this.isHacking) {
       this.hud.setPanel(this.hud.getPanel() === 'inventory' ? null : 'inventory');
     }
@@ -227,6 +328,12 @@ export class Game {
     const threat = this.enemySystem.snapshots().reduce((max, e) => Math.max(max, e.state === 'DEAD' ? 0 : e.awareness), 0);
     this.gameAudio.setThreat(threat);
 
+    // Win condition: the boss (one per level, the run's climactic encounter) is dead.
+    if (!this.hasWon && this.enemySystem.snapshots().some((e) => e.kind === 'boss' && e.state === 'DEAD')) {
+      this.hasWon = true;
+      this.input.exitPointerLock();
+    }
+
     this.updateProjectiles(dt);
 
     // Persistent tile-coordinate triggers (manifest.triggers) — fire once per trigger when stepped on.
@@ -250,7 +357,7 @@ export class Game {
     // Lock spec keeps targeting every mouse event at the locked canvas regardless
     // of what's visually on top. Recapture it once gameplay resumes.
     const panelOpen = this.hud.getPanel() !== null;
-    if (panelOpen) {
+    if (panelOpen || this.hasWon) {
       this.input.exitPointerLock();
     } else if (!this.input.isLocked()) {
       this.input.requestPointerLock();
@@ -573,7 +680,8 @@ export class Game {
     }
     // World
     const cam = this.player.camera();
-    const bobAmp = this.player.snapshot().walking;
+    const motionScale = this.settings.reduceMotion ? 0.3 : 1;
+    const bobAmp = this.player.snapshot().walking * motionScale;
     cam.pitch += Math.sin(this.player.bobPhase) * 0.04 * bobAmp;
     this.renderer.render(this.levelState.data, cam, Math.sin(this.player.bobPhase) * bobAmp * 0.05);
     // Sprites
@@ -590,6 +698,13 @@ export class Game {
         () => { this.isPaused = true; },
       );
     }
+
+    if (this.hasWon && this.refs.win.hidden) {
+      this.hud.showWinScreen(() => {
+        this.shell.stop();
+        void this.beginWithMenu();
+      });
+    }
   }
 
   private buildSprites(): SpriteRef[] {
@@ -602,8 +717,9 @@ export class Game {
         position: e.position,
         dist: dx * dx + dy * dy,
         type: 'enemy',
-        index: e.kind === 'drone' ? 0 : e.kind === 'heavy' ? 1 : e.kind === 'ghost' ? 2 : 3,
+        index: e.kind === 'drone' ? 0 : e.kind === 'heavy' ? 1 : e.kind === 'ghost' ? 2 : e.kind === 'turret' ? 3 : 4,
         flicker: e.kind === 'ghost' ? 0.7 : undefined,
+        scale: e.kind === 'boss' ? 1.6 : undefined,
       });
     }
     // In-flight rocket projectiles
@@ -690,6 +806,7 @@ export class Game {
     this.hud.showBootScreen({
       onNewGame: async () => {
         await this.audio.init();
+        this.applySettings();
         this.gameAudio.prime();
         this.input.requestPointerLock();
         this.begin();
@@ -698,6 +815,7 @@ export class Game {
       hasSave: !!await readSlot(SAVE_SLOT).catch(() => null),
       onContinue: async () => {
         await this.audio.init();
+        this.applySettings();
         this.gameAudio.prime();
         await this.load();
         this.input.requestPointerLock();

@@ -8,3 +8,5 @@ export * from './GameShell';
 export * from './Persistence';
 export * from './Procedural';
 export * from './Assets';
+export * from './Settings';
+export * from './ErrorLog';

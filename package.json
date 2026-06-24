@@ -1,7 +1,7 @@
 {
   "name": "neurodoom",
   "version": "0.1.0",
-  "description": "Cyberpunk immersive-sim FPS — Doom's brutality meets System Shock's depth, in the browser",
+  "description": "Cyberpunk immersive-sim FPS — visceral combat meets deep systemic simulation, in the browser",
   "type": "module",
   "private": true,
   "scripts": {

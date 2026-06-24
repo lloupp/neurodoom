@@ -75,6 +75,15 @@ const level1: MapManifest = {
       patrol: [],
       sight: 9,
     },
+    {
+      // SHIVA's warden — sealed behind door_secure_lab, the run's climactic
+      // encounter. Killing it ends the run (see Game.update's win check).
+      kind: 'boss',
+      x: 20,
+      y: 14,
+      patrol: [],
+      sight: 10,
+    },
   ],
   interactables: [
     { id: 'door_entry_to_corridor', kind: 'door', x: 7, y: 1, locked: false, unlockFlag: undefined },

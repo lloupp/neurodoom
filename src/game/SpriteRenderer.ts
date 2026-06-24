@@ -24,6 +24,8 @@ export interface SpriteRef {
   frame?: number;
   /** If non-zero, blink in/out (e.g., ghost spawn). */
   flicker?: number;
+  /** Size multiplier on top of the standard distance-based projection (e.g. boss). */
+  scale?: number;
 }
 
 /** Camera-relative projection for a single billboard entity. */
@@ -93,7 +95,7 @@ export class SpriteRenderer {
     const behind = Math.abs(bearing) > Math.PI / 2 + cam.fov / 2;
 
     // Distance scaling for size
-    const scale = 1 / dist;
+    const scale = (1 / dist) * (s.scale ?? 1);
     const heightPx = (this.height * scale) * 0.9;
     const widthPx = heightPx;
 

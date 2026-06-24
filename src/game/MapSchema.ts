@@ -31,7 +31,7 @@ export interface MapInteractable {
 }
 
 export interface MapEnemySpawn {
-  kind: 'drone' | 'heavy' | 'ghost' | 'turret';
+  kind: 'drone' | 'heavy' | 'ghost' | 'turret' | 'boss';
   x: number; y: number;
   /** Path as a series of tile coords to walk in order */
   patrol: Array<[number, number]>;

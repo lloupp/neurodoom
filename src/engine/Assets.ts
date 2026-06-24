@@ -41,6 +41,7 @@ export class AssetLoader {
         this.makeEnemySprite('#ff4040', 'heavy_grunt'),
         this.makeEnemySprite('#4be3ff', 'ghost'),
         this.makeTurretSprite(),
+        this.makeEnemySprite('#c074ff', 'boss'),
       ],
       weapons: [
         this.makeWeaponSprite('pistol'),

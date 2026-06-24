@@ -162,6 +162,8 @@ export class Game {
     };
     this.hud.onRebindKey = (action: RemappableAction, key: string) => {
       this.input.setBinding(action, key);
+      // setBinding may have swapped a conflicting action's key — refresh all labels, not just this one.
+      this.hud.populateMenu(this.settings, this.input.getBindings());
     };
     this.hud.onResume = () => {
       this.isPaused = false;
@@ -427,13 +429,20 @@ export class Game {
       }
     }
 
-    // Room name based on player tile
+    // Room name based on player tile — a manifest-authored zone name takes
+    // priority; falls back to an auto-derived coordinate label for tiles
+    // designers haven't named.
     if (this.levelState.data) {
       const tx = Math.floor(this.player.position.x);
       const ty = Math.floor(this.player.position.y);
-      const room = this.levelState.data.rooms.find((r) => tx >= r.x && tx < r.x + r.w && ty >= r.y && ty < r.y + r.h);
-      if (room) {
-        this.roomCell.set(`Room ${room.x + 0}-${room.y + 0} (${room.w}x${room.h})`);
+      const zone = this.levelState.manifest?.zones?.find((z) => tx >= z.x && tx < z.x + z.w && ty >= z.y && ty < z.y + z.h);
+      if (zone) {
+        this.roomCell.set(zone.name);
+      } else {
+        const room = this.levelState.data.rooms.find((r) => tx >= r.x && tx < r.x + r.w && ty >= r.y && ty < r.y + r.h);
+        if (room) {
+          this.roomCell.set(`Room ${room.x + 0}-${room.y + 0} (${room.w}x${room.h})`);
+        }
       }
     }
 

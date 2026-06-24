@@ -120,6 +120,14 @@ const level1: MapManifest = {
   triggers: [
     { x: 14, y: 12, type: 'spawn_ghost', data: { kind: 'heavy' } },
   ],
+  zones: [
+    { x: 0, y: 0, w: 8, h: 19, name: 'Holding Cell — Subject 14' },
+    { x: 8, y: 0, w: 8, h: 19, name: 'Research Annex' },
+    { x: 16, y: 0, w: 16, h: 3, name: 'Sublevel Access Corridor' },
+    { x: 16, y: 3, w: 8, h: 8, name: 'Lab 2 — SHIVA Relay' },
+    { x: 16, y: 11, w: 8, h: 8, name: 'Secure Lab — Warden’s Vault' },
+    { x: 24, y: 3, w: 8, h: 16, name: 'East Wing' },
+  ],
 };
 
 export default level1;

@@ -80,8 +80,15 @@ export class Input {
 
   getBindings(): Record<RemappableAction, string> { return { ...this.keyBindings }; }
 
+  /** Binds `key` to `action`. If another action already used that key, the
+   *  two actions swap keys instead of ending up bound to the same one. */
   setBinding(action: RemappableAction, key: string): void {
-    this.keyBindings[action] = key.toLowerCase();
+    const normalized = key.toLowerCase();
+    const previousKey = this.keyBindings[action];
+    const conflicting = (Object.keys(this.keyBindings) as RemappableAction[])
+      .find((a) => a !== action && this.keyBindings[a] === normalized);
+    if (conflicting) this.keyBindings[conflicting] = previousKey;
+    this.keyBindings[action] = normalized;
     try { localStorage.setItem(BINDINGS_KEY, JSON.stringify(this.keyBindings)); } catch { /* best-effort */ }
   }
 

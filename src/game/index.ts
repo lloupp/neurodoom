@@ -13,8 +13,10 @@ import { loadLevel } from '../engine/LevelLoader';
 import { MapRenderer } from './MapRenderer';
 import { SpriteRenderer, type SpriteRef } from './SpriteRenderer';
 import { Player, WEAPONS, type WeaponId } from './Player';
-import { EnemySystem } from './Enemy';
-import { TerminalSystem } from './Terminal';
+import { EnemySystem, type LootDrop } from './Enemy';
+import { surfaceAt } from './Level';
+import { TerminalSystem, type LogTag } from './Terminal';
+import type { MapTrigger } from './MapSchema';
 import { HUD, type HUDRefs } from './HUD';
 import { GameAudio } from './Audio';
 import { generatePuzzle, startHack, tickHack, submitToken, describeProgram } from './Hacking';
@@ -52,7 +54,9 @@ export class Game {
   flags = new Set<string>();
   playTimeMs = 0;
   hackState: ReturnType<typeof startHack> | null = null;
+  hackingTargetId: string | null = null;
   isHacking = false;
+  private firedTriggers = new Set<string>();
   isPaused = false;
   deathAt = 0;
   weaponIndex = 0;
@@ -85,10 +89,16 @@ export class Game {
       panelInventory: refs.panelInventory,
     };
     this.hud = new HUD(hudRefs);
+    this.hud.onSelectWeapon = (id) => this.player.setWeapon(id);
+    this.hud.onReorderInventory = (from, to) => this.player.reorderInventory(from, to);
 
     window.addEventListener('resize', () => {
       this.renderer.resize();
       this.spriteRenderer.resize();
+    });
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') void this.audio.suspend();
+      else void this.audio.resume();
     });
   }
 
@@ -124,6 +134,14 @@ export class Game {
     this.enemySystem = new EnemySystem(loaded, this.player);
     for (const e of rec.manifest.enemies) this.enemySystem.spawn(e.kind, e.x + 0.5, e.y + 0.5, e.patrol);
     this.terminalSystem = new TerminalSystem(loaded, items, this.flags);
+    // Doors that aren't gated by a flag are open from the start — only the
+    // tile char (not the interactable's `locked` flag) governs collision,
+    // so they must be carved out of the grid here.
+    for (const inter of rec.manifest.interactables) {
+      if (inter.kind === 'door' && !inter.locked) this.terminalSystem.unlockDoor(inter.id);
+    }
+    this.firedTriggers.clear();
+    void this.save();
     return true;
   }
 
@@ -156,6 +174,13 @@ export class Game {
         if (this.hackState.status === 'won') {
           this.terminalSystem.unlockDoor('door_secure_lab');
           this.flags.add('flag_lab_terminal');
+          if (this.hackingTargetId) this.applyLogTags(this.terminalSystem.open(this.hackingTargetId));
+        } else {
+          // Failure: trace alarm + a ghost spawns near the player's position.
+          const px = this.player.position.x;
+          const py = this.player.position.y;
+          this.gameAudio.playAlarm({ x: px, y: py, z: 0 });
+          this.enemySystem.spawn('drone', px + 2, py + 2, []);
         }
         this.isHacking = false;
         this.hackState = null;
@@ -186,38 +211,74 @@ export class Game {
       },
     });
 
+    // world.threat: highest enemy awareness drives the adaptive ambient/music mix
+    const threat = this.enemySystem.snapshots().reduce((max, e) => Math.max(max, e.state === 'DEAD' ? 0 : e.awareness), 0);
+    this.gameAudio.setThreat(threat);
+
+    // Persistent tile-coordinate triggers (manifest.triggers) — fire once per trigger when stepped on.
+    const playerTileX = Math.floor(this.player.position.x);
+    const playerTileY = Math.floor(this.player.position.y);
+    for (const trig of this.levelState.manifest?.triggers ?? []) {
+      const key = `${trig.x},${trig.y},${trig.type}`;
+      if (trig.x === playerTileX && trig.y === playerTileY && !this.firedTriggers.has(key)) {
+        this.firedTriggers.add(key);
+        this.applyTrigger(trig);
+      }
+    }
+
     // Auto-save every ~30s
     if (Math.round(this.playTimeMs / 1000) % 30 === 0 && this.playTimeMs > 1000) {
       void this.save();
     }
 
-    // Pointer-lock recovery
-    if (this.input.isLocked() === false) {
+    // Pointer-lock follows panel state: release the cursor so panel buttons (close,
+    // hack/logs, weapon slots) are actually clickable — while locked, the Pointer
+    // Lock spec keeps targeting every mouse event at the locked canvas regardless
+    // of what's visually on top. Recapture it once gameplay resumes.
+    const panelOpen = this.hud.getPanel() !== null;
+    if (panelOpen) {
+      this.input.exitPointerLock();
+    } else if (!this.input.isLocked()) {
       this.input.requestPointerLock();
     }
 
     // Interact prompt + approach detection
     const target = this.terminalSystem.pickApproach(this.player);
-    const refX = (target?.bounds.x ?? 0) + 1;
-    const refY = (target?.bounds.y ?? 0) + 1;
-    void refX; void refY;
-    this.refs.prompt.hidden = !target;
+    // Doors aren't tracked by TerminalSystem — checked separately so `E` near a
+    // locked door gives feedback instead of doing nothing (README: "E to interact
+    // with terminals and doors"). Unlocked doors need no prompt; their tile is
+    // already passable.
+    const doorTarget = !target
+      ? this.levelState.manifest?.interactables.find((i) => {
+          if (i.kind !== 'door' || !i.locked) return false;
+          const dx = (i.x + 0.5) - this.player.position.x;
+          const dy = (i.y + 0.5) - this.player.position.y;
+          return Math.hypot(dx, dy) < 1.5;
+        }) ?? null
+      : null;
+    this.refs.prompt.hidden = !target && !doorTarget;
+    if (doorTarget && !target) {
+      this.refs.prompt.innerHTML = `[E] LOCKED — ${doorTarget.prompt ?? 'requires access'}`;
+      if (rawInput.interact) this.gameAudio.playUi('error');
+    }
     if (target) {
       const inter = this.levelState.manifest?.interactables.find((i) => i.id === target.id);
       this.refs.prompt.innerHTML = `[E] ${(inter?.prompt ?? target.label).slice(0, 40)}`;
       if (rawInput.interact) {
-        if (inter?.kind === 'door' && !inter.locked) {
-          // no-op for now — door opens mechanically
-        }
         if (inter?.kind === 'terminal' || inter?.kind === 'audio_log') {
           if (inter.locked) {
             // start hack minigame
             const puzzle = generatePuzzle(Date.now() & 0xFFFFFFFF, 'normal');
             this.hackState = startHack(puzzle);
+            this.hackingTargetId = target.id;
             this.isHacking = true;
             this.hud.setPanel('hack');
           } else {
-            this.terminalSystem.open(target.id);
+            const tags = this.terminalSystem.open(target.id);
+            this.applyLogTags(tags);
+            // Logs are heard, not just read (SPEC 4.7): play the transmission
+            // from the interactable's world position so HRTF places it in space.
+            this.gameAudio.playLog({ x: inter.x + 0.5, y: inter.y + 0.5, z: 0 });
             this.hud.setPanel('terminal');
           }
         }
@@ -234,6 +295,11 @@ export class Game {
         if (inter?.kind === 'keycard') {
           this.player.addInventory('keycard_red');
           this.flags.add('flag_lab_terminal');
+          this.gameAudio.playUi('beep');
+          this.flagsCleanup(inter);
+        }
+        if (inter?.kind === 'credits') {
+          this.player.addCredits(25);
           this.gameAudio.playUi('beep');
           this.flagsCleanup(inter);
         }
@@ -288,6 +354,23 @@ export class Game {
     return 'Tip: terminals are loud. Guards hear.';
   }
 
+  private lootSeq = 0;
+
+  private spawnLoot(drop: LootDrop): void {
+    const m = this.levelState.manifest;
+    if (!m) return;
+    m.interactables.push({
+      id: `loot_${this.lootSeq++}`,
+      kind: drop.kind,
+      x: Math.floor(drop.position.x),
+      y: Math.floor(drop.position.y),
+      prompt: drop.kind === 'ammo' ? 'Salvaged ammo'
+        : drop.kind === 'medkit' ? 'Salvaged medkit'
+        : drop.kind === 'credits' ? 'Salvaged credits'
+        : 'Salvaged keycard',
+    });
+  }
+
   private flagsCleanup(inter: { x: number; y: number; id: string }) {
     // Remove the interactable so it can't be used twice (visual: brighten area later)
     const m = this.levelState.manifest;
@@ -295,6 +378,63 @@ export class Game {
     const idx = m.interactables.findIndex((i) => i.id === inter.id);
     if (idx >= 0) m.interactables.splice(idx, 1);
     void inter.x; void inter.y;
+  }
+
+  /** Applies unlock/lock/spawn/flag tags parsed from a just-opened terminal log. */
+  private applyLogTags(tags: LogTag[]): void {
+    for (const tag of tags) {
+      switch (tag.type) {
+        case 'unlock': this.terminalSystem.unlockDoor(tag.value); break;
+        case 'lock': this.terminalSystem.lockDoor(tag.value); break;
+        case 'flag': this.flags.add(tag.value); break;
+        case 'spawn': {
+          const kind = tag.value.toLowerCase().includes('heavy') ? 'heavy' : 'drone';
+          this.enemySystem.spawn(kind, this.player.position.x + 2, this.player.position.y + 2, []);
+          break;
+        }
+      }
+    }
+  }
+
+  /** Applies a persistent tile-coordinate trigger from manifest.triggers (fires once, see firedTriggers). */
+  private applyTrigger(trig: MapTrigger): void {
+    const data = trig.data ?? {};
+    switch (trig.type) {
+      case 'set_flag': {
+        const key = data.key;
+        if (typeof key === 'string') this.flags.add(key);
+        break;
+      }
+      case 'spawn_ghost': {
+        const kind = data.kind === 'heavy' ? 'heavy' : 'drone';
+        this.enemySystem.spawn(kind, trig.x + 0.5, trig.y + 0.5, []);
+        break;
+      }
+      case 'unlock': {
+        const id = data.id;
+        if (typeof id === 'string') this.terminalSystem.unlockDoor(id);
+        break;
+      }
+      case 'lock': {
+        const id = data.id;
+        if (typeof id === 'string') this.terminalSystem.lockDoor(id);
+        break;
+      }
+      case 'play_log': {
+        const id = data.id;
+        if (typeof id === 'string') {
+          this.applyLogTags(this.terminalSystem.open(id));
+          this.gameAudio.playLog({ x: trig.x + 0.5, y: trig.y + 0.5, z: 0 });
+        }
+        break;
+      }
+      case 'teleport': {
+        const x = data.x;
+        const y = data.y;
+        if (typeof x === 'number' && typeof y === 'number') this.player.position = { x, y };
+        break;
+      }
+    }
   }
 
   private handleFire(weapon: WeaponId): void {
@@ -307,9 +447,13 @@ export class Game {
       const tileX = Math.floor((r.pos.x + 0.0001) / (this.levelState.data?.manifest.cellSize ?? 1));
       const tileY = Math.floor((r.pos.y + 0.0001) / (this.levelState.data?.manifest.cellSize ?? 1));
       const radius = weapon === 'shotgun' ? 0.7 : weapon === 'pulse_rifle' ? 0.45 : 0.4;
-      const damage = WEAPONS[weapon].damage;
+      // Damage = base x crit x distance-falloff (per-target armor applied in EnemySystem)
+      const dist = Math.hypot(r.pos.x - this.player.position.x, r.pos.y - this.player.position.y);
+      const falloff = Math.max(0.5, 1 - 0.5 * (dist / WEAPONS[weapon].range));
+      const crit = Math.random() < 0.12 ? 1.6 : 1;
+      const damage = WEAPONS[weapon].damage * crit * falloff;
       const knockDir = angle;
-      const hits = this.enemySystem.damageAtTile(tileX, tileY, radius, damage, knockDir);
+      const { hits, loot } = this.enemySystem.damageAtTile(tileX, tileY, radius, damage, knockDir);
       // Subtract ammo based on weapon.pellets for shotgun (handled by Player.update which already decremented 1)
       if (weapon === 'shotgun') {
         this.player.refill('shotgun', this.player.ammo.shotgun + 7);
@@ -317,6 +461,7 @@ export class Game {
       if (hits.length) {
         this.gameAudio.playHit({ x: r.pos.x, y: r.pos.y, z: 0 });
       }
+      for (const drop of loot) this.spawnLoot(drop);
     }
     this.gameAudio.playFire(weapon, pos);
     void pos;
@@ -324,7 +469,11 @@ export class Game {
 
   private handleStep(amp: number): void {
     if (amp < 0.1) return;
-    this.gameAudio.playStep({ x: this.player.position.x, y: this.player.position.y, z: 0 });
+    const manifest = this.levelState.data?.manifest;
+    const surface = manifest
+      ? surfaceAt(manifest.tiles, manifest.cellSize, this.player.position.x, this.player.position.y)
+      : 'concrete';
+    this.gameAudio.playStep({ x: this.player.position.x, y: this.player.position.y, z: 0 }, surface);
   }
 
   private render(alpha: number, t: number): void {
@@ -376,6 +525,7 @@ export class Game {
         if (inter.kind === 'medkit')    spriteIndex = 1;
         if (inter.kind === 'ammo')      spriteIndex = 2;
         if (inter.kind === 'keycard')   spriteIndex = 3;
+        if (inter.kind === 'credits')   spriteIndex = 4;
         if (spriteIndex >= 0) {
           const dx = inter.x + 0.5 - this.player.position.x;
           const dy = inter.y + 0.5 - this.player.position.y;
@@ -457,21 +607,8 @@ export class Game {
   }
 
   private startMenuAudio(): void {
-    // A subtle ambient bed synthesized as a low drone on the master bus
-    setTimeout(() => {
-      const ctx = this.audio.ctxInstance();
-      if (!ctx) return;
-      const osc = ctx.createOscillator();
-      osc.type = 'sawtooth';
-      osc.frequency.value = 56;
-      const lp = ctx.createBiquadFilter();
-      lp.type = 'lowpass';
-      lp.frequency.value = 320;
-      const g = ctx.createGain();
-      g.gain.value = 0.0008;
-      osc.connect(lp).connect(g).connect((this.audio as unknown as { master: GainNode }).master);
-      osc.start();
-    }, 400);
+    // Ambient bed (ambient bus) + tension layer (music bus), mixed by world.threat.
+    setTimeout(() => this.gameAudio.startAmbient(), 400);
   }
 }
 

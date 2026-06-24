@@ -57,6 +57,21 @@ export function tryMove(
   return { x: fromX, y: fromY };
 }
 
+export type Surface = 'concrete' | 'metal' | 'organic';
+
+/** Walkable floor variants that carry a distinct footstep sound (SPEC 4.2).
+ *  Lowercase so they stay non-solid (see isSolid) while their uppercase
+ *  counterparts ('M', 'O') remain solid wall/hazard tiles. */
+const SURFACE_BY_TILE: Record<string, Surface> = { g: 'metal', w: 'organic' };
+
+/** Footstep surface under a world position (SPEC 4.2: step audio palette by surface). */
+export function surfaceAt(tiles: string[], cell: number, x: number, y: number): Surface {
+  const tx = Math.floor(x / cell);
+  const ty = Math.floor(y / cell);
+  const ch = tiles[ty]?.[tx];
+  return (ch && SURFACE_BY_TILE[ch]) || 'concrete';
+}
+
 export type LevelRegistryEntry = {
   id: string;
   name: string;

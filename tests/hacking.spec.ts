@@ -2,24 +2,41 @@ import { describe, it, expect } from 'vitest';
 import { generatePuzzle, startHack, tickHack, submitToken } from '../src/game/Hacking';
 
 describe('Hacking - vertical slice', () => {
-  it('generates puzzles with the requested difficulty', () => {
+  it('generates 3-line puzzles with the requested difficulty', () => {
     const easy = generatePuzzle(1234, 'easy');
     expect(easy.missingIndices.length).toBe(1);
-    expect(easy.program.length).toBe(4);
+    expect(easy.lineWidth).toBe(2);
+    expect(easy.program.length).toBe(6);   // 3 lines x 2 tokens
     const normal = generatePuzzle(1234, 'normal');
     expect(normal.missingIndices.length).toBe(2);
-    expect(normal.program.length).toBe(6);
+    expect(normal.lineWidth).toBe(3);
+    expect(normal.program.length).toBe(9); // 3 lines x 3 tokens
   });
 
-  it('completion wins when all missing slots filled with valid tokens', () => {
+  it('grants three seconds of tolerance per token', () => {
+    const hard = generatePuzzle(1234, 'hard');
+    expect(hard.program.length).toBe(12);  // 3 lines x 4 tokens
+    expect(hard.timeLimit).toBe(36);       // 3s x 12 tokens
+  });
+
+  it('completion wins only when missing slots are filled with the real (cipher-deduced) solution', () => {
     const puzzle = generatePuzzle(7, 'easy');
     const state = startHack(puzzle);
     for (const idx of puzzle.missingIndices) {
-      submitToken(state, idx, 'MOV');
+      submitToken(state, idx, puzzle.solution[idx]!);
     }
-    expect(state.puzzle.missingIndices.every((i) => (state.userInput.get(i) ?? '').length > 0)).toBe(true);
     tickHack(state, 0.01);
-    expect(state.status === 'won' || state.status === 'running').toBe(true);
+    expect(state.status).toBe('won');
+  });
+
+  it('does not win on a wrong-but-non-empty guess', () => {
+    const puzzle = generatePuzzle(7, 'easy');
+    const state = startHack(puzzle);
+    for (const idx of puzzle.missingIndices) {
+      submitToken(state, idx, 'ZZZ');
+    }
+    tickHack(state, 0.01);
+    expect(state.status).not.toBe('won');
   });
 
   it('loses if time runs out', () => {

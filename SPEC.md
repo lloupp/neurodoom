@@ -25,8 +25,8 @@ The mood: industrial, claustrophobic, neon-lit, dripping. Think *System Shock 2*
 | HUD | HTML + CSS Grid + CSS vars | Theming via `--neon` / `--shadow` etc; no React |
 | State | Mini-ECS (custom) | Full control, ~200 LOC, no dep |
 | Audio | Web Audio API + `PannerNode` (HRTF) | True 3D positional, scripted "phones" feel |
-| Persistence | IndexedDB (idb-keyval) | Saves, audio cache, progress flags |
-| Levels | `MAP.json` registry | Designers ship maps without recompiling |
+| Persistence | IndexedDB (raw, zero-dep) | Saves, audio cache, progress flags |
+| Levels | `.ts` `MapManifest` registry | One typed, tree-shaken manifest per level |
 | Assets | Procedural textures (canvas noise) | No external downloads; deterministic |
 
 ## 4. Systems
@@ -38,7 +38,7 @@ The mood: industrial, claustrophobic, neon-lit, dripping. Think *System Shock 2*
 
 ### 4.2 Player Controller
 - WASD + mouse look (pointer lock)
-- AABB collision against tile grid
+- Circle-radius collision against the tile grid (wall-sliding, no full stop)
 - Stamina system: sprint → drains, idle → recovers
 - Headbob timed with footsteps; step audio palette by surface
 
@@ -68,9 +68,9 @@ States: `IDLE → PATROL → ALERT → CHASE → ATTACK → RETREAT → DEAD`
 - Failure → trace alarm + enemy spawn in adjacent rooms
 
 ### 4.7 Terminals & Logs
-- Each terminal holds an array of `LogEntry { id, src, audioUrl, transcript, heard }`
-- Audio plays once player approaches; transcript becomes readable
-- Lexer parses `unlock:Door.A`, `spawn:Ghost.2`, `flag:story.shiva` from transcript tags
+- Each terminal holds an array of `TerminalLogEntry { id, title, transcript, source?, audioKey, played? }`
+- Audio (a positional voice-bus transmission) plays once the player opens the log; transcript becomes readable
+- Lexer parses `unlock:Door.A`, `lock:Door.B`, `spawn:Ghost.2`, `flag:story.shiva` from transcript tags
 
 ### 4.8 AudioBus
 - `AudioContext` master + per-source `PannerNode` (HRTF)
@@ -93,51 +93,57 @@ States: `IDLE → PATROL → ALERT → CHASE → ATTACK → RETREAT → DEAD`
 ```
 neurodoom/
 ├─ SPEC.md
+├─ README.md
 ├─ package.json
 ├─ tsconfig.json
 ├─ vite.config.ts
-├─ index.html              # Mount root
-├─ public/                 # Static (audio samples synthesized)
+├─ vitest.config.ts
+├─ index.html              # Mount root (#root); HUD markup is built in main.ts
 ├─ src/
-│  ├─ main.ts              # Boot
+│  ├─ main.ts              # Boot + DOM/HUD markup injection
 │  ├─ style.css            # Globals (CSS vars, scanlines, layout)
 │  ├─ engine/
 │  │  ├─ index.ts          # Public engine surface
+│  │  ├─ types.ts          # Shared math/vector + helpers
 │  │  ├─ GameShell.ts      # RAF loop + fixed-timestep accumulator
 │  │  ├─ ECS.ts            # Entity/Component/System primitives
 │  │  ├─ EventBus.ts       # Typed pub/sub
 │  │  ├─ State.ts          # Global game state container
 │  │  ├─ Input.ts          # Mouse + keyboard, pointer-lock
-│  │  ├─ Audio.ts          # AudioBus with PannerNode
-│  │  ├─ Persistence.ts    # IndexedDB wrapper
+│  │  ├─ Audio.ts          # AudioBus with PannerNode (HRTF)
+│  │  ├─ Persistence.ts    # IndexedDB wrapper (raw, zero-dep)
 │  │  ├─ Assets.ts         # Texture/sound loaders (procedural + cache)
-│  │  └─ Procedural.ts     # Canvas noise textures, palette gen
-│  ├─ game/
-│  │  ├─ index.ts          # Bootstrap game state
-│  │  ├─ Level.ts          # Loader for MAP.json, spawns, triggers
-│  │  ├─ Player.ts         # Player entity + controller
-│  │  ├─ MapRenderer.ts    # DDA raycaster + z-buffer
-│  │  ├─ SpriteRenderer.ts # Sprites + weapons canvas
-│  │  ├─ Enemy.ts          # Enemy entity + BehaviorTree
-│  │  ├─ Inventory.ts      # Inventory system + UI bridge
-│  │  ├─ Terminal.ts       # Terminal interactable + log playback
-│  │  ├─ Hacking.ts        # TIS-100-style minigame
-│  │  ├─ HUD.ts            # Wires DOM HUD to game state
-│  │  ├─ Audio.ts          # Game audio: alarms, footsteps, music
-│  │  └─ levels/
-│  │     ├─ registry.ts
-│  │     ├─ Level1.json    # Vertical slice: 8 rooms, est. 10 min
-│  │     └─ Level2.json    # (after polish)
-│  ├─ hud/                 # DOM markup (HUD.html imported via Vite ?raw)
-│  │  └─ index.html
-│  └─ assets/
-│     ├─ logs/             # Audio log manifests
-│     └─ palette.json      # Color tokens for procedural gen
-└─ tests/
-   ├─ engine.fixedStep.spec.ts
-   ├─ map.dda.spec.ts
-   └─ hacking.solver.spec.ts
+│  │  ├─ Procedural.ts     # Canvas noise textures + audio synths
+│  │  └─ LevelLoader.ts    # Builds runtime LevelData from a MapManifest
+│  └─ game/
+│     ├─ index.ts          # Game orchestrator (loop wiring, systems)
+│     ├─ MapSchema.ts      # MapManifest types (tiles, interactables, triggers)
+│     ├─ Level.ts          # Tile-grid collision (collidesAt / tryMove)
+│     ├─ Player.ts         # Player entity + controller
+│     ├─ MapRenderer.ts    # DDA raycaster + z-buffer
+│     ├─ SpriteRenderer.ts # Sprites + weapons canvas
+│     ├─ Enemy.ts          # Enemy entity + BehaviorTree
+│     ├─ Inventory.ts      # Inventory slot-grid render + UI bridge
+│     ├─ Item.ts           # Item kinds + snapshots
+│     ├─ Terminal.ts       # Terminal interactable + log lexer
+│     ├─ Hacking.ts        # TIS-100-style minigame
+│     ├─ HUD.ts            # Wires DOM HUD to game state
+│     ├─ Audio.ts          # Game audio: alarms, footsteps, logs, music
+│     └─ levels/
+│        ├─ registry.ts    # Level records (id/name/manifest)
+│        └─ Level1.ts      # Vertical slice manifest (Sublevel 3)
+└─ tests/                  # vitest specs
+   ├─ hacking.spec.ts
+   ├─ level.spec.ts
+   ├─ math.spec.ts
+   ├─ scenario.spec.ts     # lexer, triggers, door gating, enemy BT, loot, inventory
+   └─ sprite-projection.spec.ts
 ```
+
+> Levels are TypeScript `MapManifest` modules (not loose `.json` files) so they
+> tree-shake and type-check; designers still edit one self-contained file per
+> level. Audio samples are synthesized at runtime (`Procedural.ts`), so there is
+> no `public/` or `assets/` directory to ship.
 
 ## 6. Vertical Slice (Milestone 0→6)
 

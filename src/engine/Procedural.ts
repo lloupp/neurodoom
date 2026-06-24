@@ -212,8 +212,30 @@ export function synthAlarmPulse(ctx: AudioContext): AudioBuffer {
   return buf;
 }
 
-export function synthFootstep(ctx: AudioContext): AudioBuffer {
-  return synthNoiseBurst(ctx, 0.18);
+/** Footstep palette by surface (SPEC 4.2). Concrete is a plain noise thud;
+ *  metal grating layers a short metallic ring on top; organic floor adds a
+ *  damp, lower-pitched squelch tail. */
+export function synthFootstep(ctx: AudioContext, surface: 'concrete' | 'metal' | 'organic' = 'concrete'): AudioBuffer {
+  if (surface === 'concrete') return synthNoiseBurst(ctx, 0.18);
+
+  const sampleRate = ctx.sampleRate;
+  const dur = surface === 'metal' ? 0.22 : 0.26;
+  const len = Math.floor(dur * sampleRate);
+  const buf = ctx.createBuffer(1, len, sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) {
+    const t = i / sampleRate;
+    if (surface === 'metal') {
+      const env = Math.exp(-3.5 * t / dur);
+      const ring = Math.sin(2 * Math.PI * 1800 * t) * Math.exp(-14 * t);
+      data[i] = ((Math.random() * 2 - 1) * 0.5 + ring * 0.5) * env * 0.55;
+    } else {
+      const env = Math.exp(-2 * t / dur);
+      const squelch = Math.sin(2 * Math.PI * 90 * t) * 0.3;
+      data[i] = ((Math.random() * 2 - 1) * 0.7 + squelch) * env * 0.5;
+    }
+  }
+  return buf;
 }
 
 export function synthPulseRifle(ctx: AudioContext): AudioBuffer {

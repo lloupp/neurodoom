@@ -78,5 +78,4 @@ export async function deleteSlot(key: string): Promise<void> {
   await withStore('readwrite', (store) => store.delete(key));
 }
 
-export const SAVE_SLOT = 'slot-0';
-export const SAVE_AUTOSAVE = 'autosave';
+export const SAVE_SLOT = 'neurodoom:save:0';

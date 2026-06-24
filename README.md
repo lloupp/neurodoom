@@ -15,9 +15,9 @@ You wake up inside a black-site neural implant facility. Every terminal you jack
 GameShell (RAF loop, fixed-timestep simulation)
 ├─ engine/      GameShell • ECS • EventBus • Input • AudioBus • Persistence • Procedural • Assets • LevelLoader
 ├─ game/        Player • MapRenderer (DDA) • SpriteRenderer • Enemy BT • Inventory • Terminal • Hacking • HUD • Audio
-├─ game/levels  MAP.json-shaped manifests (one tile-grid per level, registered in levels/registry.ts)
-├─ hud/         DOM markup injected via main.ts (CSS grid overlay, neon theming)
-└─ tests/       vitest specs (Hacking, Level loader, math primitives)
+├─ game/levels  TypeScript MapManifest modules (one per level, registered in levels/registry.ts)
+├─ (hud markup) built and injected by main.ts (CSS grid overlay, neon theming)
+└─ tests/       vitest specs (hacking, level loader, math, scenario, sprite projection)
 ```
 
 ## Quickstart

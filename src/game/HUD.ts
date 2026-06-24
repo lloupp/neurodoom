@@ -6,9 +6,10 @@
  * doesn't need that fidelity and the DOM is happiest at 30Hz.
  */
 
-import type { PlayerSnapshot } from './Player';
+import type { PlayerSnapshot, WeaponId } from './Player';
 import type { EnemySnapshot } from './Enemy';
 import type { TerminalState } from './Terminal';
+import { renderInventory } from './Inventory';
 
 export interface HUDRefs {
   hud: HTMLElement;
@@ -38,6 +39,9 @@ export class HUD {
   private lastPlayerTick = 0;
   private accum = 0;
   private currentPanel: HUDState['currentPanel'] = null;
+  onSelectWeapon?: (id: WeaponId) => void;
+  onReorderInventory?: (from: number, to: number) => void;
+  private dragFromSlot: number | null = null;
   private state: HUDState = {
     player: null,
     enemies: [],
@@ -72,9 +76,10 @@ export class HUD {
   private refresh(): void {
     const p = this.state.player;
     if (!p) {
-      (this.refs.hud as HTMLElement).hidden = false;
+      (this.refs.hud as HTMLElement).hidden = true;
       return;
     }
+    (this.refs.hud as HTMLElement).hidden = false;
 
     // Vitals
     const hpEl  = this.refs.hud.querySelector<HTMLElement>('[data-display="hp"]')!;
@@ -149,6 +154,18 @@ export class HUD {
     if (this.currentPanel === 'terminal' && this.state.terminal) {
       this.renderTerminalPanel(this.state.terminal);
     }
+    // Inventory
+    if (this.currentPanel === 'inventory') {
+      this.renderInventoryPanel(p);
+    }
+  }
+
+  private renderInventoryPanel(p: PlayerSnapshot): void {
+    const grid = this.refs.panelInventory.querySelector<HTMLElement>('[data-inv-grid]')!;
+    const stamp = `${p.inventory.join(',')}|${p.weapon}`;
+    if (grid.dataset.idstamp === stamp) return;
+    grid.dataset.idstamp = stamp;
+    renderInventory(grid, { inventory: p.inventory, weapon: p.weapon });
   }
 
   private renderTerminalPanel(t: TerminalState): void {
@@ -169,15 +186,18 @@ export class HUD {
     const puzzle = h.puzzle;
     const lines: string[] = [];
     puzzle.program.forEach((node, i) => {
+      // Separate the 3 lines visually (SPEC 4.6: "three lines of tokens").
+      if (i > 0 && i % puzzle.lineWidth === 0) lines.push(`  --- LINE ${i / puzzle.lineWidth} ---`);
       const filled = h.userInput.get(i) ?? '';
       const isMissing = puzzle.missingIndices.includes(i);
       lines.push(
         isMissing
-          ? `  ${String(i).padStart(2)}: ${(filled || '??').padEnd(4)}${isMissing ? (filled ? '' : ' <--') : ''}`
+          ? `  ${String(i).padStart(2)}: ${(filled || '??').padEnd(4)} // cipher: ${node.hint}${filled ? '' : ' <--'}`
           : `  ${String(i).padStart(2)}: ${node.text.padEnd(4)}`,
       );
     });
-    grid.textContent = `// missing segment:\n${lines.join('\n')}\n\n// tokens: ${puzzle.tokenBank.join(' ')}`;
+    grid.textContent =
+      `// 3 lines — decode cipher (Caesar +1, e.g. NPW -> MOV):\n  --- LINE 0 ---\n${lines.join('\n')}\n\n// tokens: ${puzzle.tokenBank.join(' ')}`;
     time.textContent = `${h.timeLeft.toFixed(1)}`;
     traces.textContent = `${h.tracesLeft}`;
   }
@@ -244,6 +264,28 @@ export class HUD {
     });
     this.refs.panelTerminal.querySelector('[data-act="logs"]')!.addEventListener('click', () => {
       this.currentPanel = 'logs';
+    });
+    // inventory weapon slots (click to equip)
+    const grid = this.refs.panelInventory.querySelector<HTMLElement>('[data-inv-grid]')!;
+    grid.addEventListener('click', (ev) => {
+      const slot = (ev.target as HTMLElement).closest<HTMLElement>('.weapon-slot');
+      const id = slot?.dataset.weapon as WeaponId | undefined;
+      if (id) this.onSelectWeapon?.(id);
+    });
+    // inventory hot slots: drag-drop reorder (SPEC 4.5)
+    grid.addEventListener('dragstart', (ev) => {
+      const slot = (ev.target as HTMLElement).closest<HTMLElement>('.slot[data-slot-index]');
+      this.dragFromSlot = slot ? Number(slot.dataset.slotIndex) : null;
+    });
+    grid.addEventListener('dragover', (ev) => {
+      if (this.dragFromSlot !== null) ev.preventDefault(); // allow drop
+    });
+    grid.addEventListener('drop', (ev) => {
+      ev.preventDefault();
+      const slot = (ev.target as HTMLElement).closest<HTMLElement>('.slot[data-slot-index]');
+      const to = slot ? Number(slot.dataset.slotIndex) : null;
+      if (this.dragFromSlot !== null && to !== null) this.onReorderInventory?.(this.dragFromSlot, to);
+      this.dragFromSlot = null;
     });
   }
 

@@ -12,7 +12,7 @@ export interface MapTrigger {
 
 export interface MapInteractable {
   id: string;
-  kind: 'door' | 'terminal' | 'panel' | 'keycard' | 'medkit' | 'ammo' | 'audio_log';
+  kind: 'door' | 'terminal' | 'panel' | 'keycard' | 'medkit' | 'ammo' | 'audio_log' | 'credits';
   x: number; y: number;        // tile coords
   /** Door/terminal direction (0=east, 90=north, 180=west, 270=south) */
   face?: number;
@@ -53,6 +53,8 @@ export interface MapManifest {
     *  C = concrete solid
     *  O = organic (biological hazard)
     *  D = door tile (rendered as wall + interactable)
+    *  g = metal grating floor (walkable; SPEC 4.2 footstep palette)
+    *  w = organic floor (walkable; SPEC 4.2 footstep palette)
     */
   tiles: string[];
   /** Tile side length in world units (1 world unit = 1 tile) */

@@ -31,7 +31,7 @@ export interface MapInteractable {
 }
 
 export interface MapEnemySpawn {
-  kind: 'drone' | 'heavy';
+  kind: 'drone' | 'heavy' | 'ghost' | 'turret' | 'boss';
   x: number; y: number;
   /** Path as a series of tile coords to walk in order */
   patrol: Array<[number, number]>;
@@ -69,4 +69,7 @@ export interface MapManifest {
   interactables: MapInteractable[];
   /** Persistent narrative triggers (e.g., unlock next level on flag) */
   triggers: MapTrigger[];
+  /** Named areas shown in the HUD room label; falls back to an auto-generated
+   *  coordinate label (see LevelLoader) for any tile not covered by one of these. */
+  zones?: Array<{ x: number; y: number; w: number; h: number; name: string }>;
 }

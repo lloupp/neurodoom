@@ -10,16 +10,20 @@ import type { PlayerSnapshot, WeaponId } from './Player';
 import type { EnemySnapshot } from './Enemy';
 import type { TerminalState } from './Terminal';
 import { renderInventory } from './Inventory';
+import type { RemappableAction } from '../engine/Input';
+import type { Difficulty, GameSettings } from '../engine/Settings';
 
 export interface HUDRefs {
   hud: HTMLElement;
   boot: HTMLElement;
   dead: HTMLElement;
+  win: HTMLElement;
   prompt: HTMLElement;
   panelTerminal: HTMLElement;
   panelHack: HTMLElement;
   panelLogs: HTMLElement;
   panelInventory: HTMLElement;
+  panelMenu: HTMLElement;
 }
 
 export interface HUDState {
@@ -41,7 +45,17 @@ export class HUD {
   private currentPanel: HUDState['currentPanel'] = null;
   onSelectWeapon?: (id: WeaponId) => void;
   onReorderInventory?: (from: number, to: number) => void;
+  onSetVolume?: (cat: 'master' | 'sfx' | 'voice' | 'ambient' | 'music', v: number) => void;
+  onSetSensitivity?: (v: number) => void;
+  onSetDifficulty?: (d: Difficulty) => void;
+  onSetReduceMotion?: (v: boolean) => void;
+  onRebindKey?: (action: RemappableAction, key: string) => void;
+  onResume?: () => void;
+  onMainMenu?: () => void;
+  onExportSave?: () => void;
+  onImportSave?: (file: File) => void;
   private dragFromSlot: number | null = null;
+  private rebindArming: RemappableAction | null = null;
   private state: HUDState = {
     player: null,
     enemies: [],
@@ -137,8 +151,8 @@ export class HUD {
     this.refs.prompt.hidden = !this.state.terminal;
 
     // Panels
-    for (const p of ['terminal', 'hack', 'logs', 'inventory'] as const) {
-      const el = this.refs[`panel${p.charAt(0).toUpperCase() + p.slice(1) as 'Terminal' | 'Hack' | 'Logs' | 'Inventory'}`];
+    for (const p of ['terminal', 'hack', 'logs', 'inventory', 'menu'] as const) {
+      const el = this.refs[`panel${p.charAt(0).toUpperCase() + p.slice(1) as 'Terminal' | 'Hack' | 'Logs' | 'Inventory' | 'Menu'}`];
       if (el) (el as HTMLElement).hidden = this.currentPanel !== p;
     }
 
@@ -233,6 +247,15 @@ export class HUD {
     };
   }
 
+  showWinScreen(onMenu: () => void): void {
+    this.refs.win.hidden = false;
+    const menuBtn = this.refs.win.querySelector<HTMLButtonElement>('[data-act="menu"]')!;
+    menuBtn.onclick = () => {
+      this.refs.win.hidden = true;
+      onMenu();
+    };
+  }
+
   showBootScreen(opts: { onNewGame: () => void; onContinue?: () => void; hasSave?: boolean }): void {
     const boot = this.refs.boot;
     boot.dataset.screen = 'boot';
@@ -248,6 +271,29 @@ export class HUD {
       boot.hidden = true;
       opts.onContinue?.();
     };
+  }
+
+  /** Sets the options panel's controls to reflect the current persisted
+   *  settings + key bindings. Call once at startup (values only change via
+   *  the panel itself afterwards, so no need to re-sync on every pause). */
+  populateMenu(settings: GameSettings, bindings: Record<RemappableAction, string>): void {
+    const panel = this.refs.panelMenu;
+    const volEl = (cat: string) => panel.querySelector<HTMLInputElement>(`[data-vol="${cat}"]`)!;
+    volEl('master').value = String(Math.round(settings.masterVolume * 100));
+    volEl('sfx').value = String(Math.round(settings.sfxVolume * 100));
+    volEl('voice').value = String(Math.round(settings.voiceVolume * 100));
+    volEl('ambient').value = String(Math.round(settings.ambientVolume * 100));
+    volEl('music').value = String(Math.round(settings.musicVolume * 100));
+    const sensEl = panel.querySelector<HTMLInputElement>('[data-sens]')!;
+    sensEl.value = String(Math.round(((settings.sensitivity - 0.0005) / 0.0055) * 100));
+    const diffEl = panel.querySelector<HTMLSelectElement>('[data-difficulty]')!;
+    diffEl.value = settings.difficulty;
+    const motionEl = panel.querySelector<HTMLInputElement>('[data-reduce-motion]')!;
+    motionEl.checked = settings.reduceMotion;
+    for (const [action, key] of Object.entries(bindings)) {
+      const btn = panel.querySelector<HTMLButtonElement>(`[data-rebind="${action}"]`);
+      if (btn) btn.textContent = key === ' ' ? 'SPACE' : key.toUpperCase();
+    }
   }
 
   private attachUI(): void {
@@ -287,6 +333,60 @@ export class HUD {
       if (this.dragFromSlot !== null && to !== null) this.onReorderInventory?.(this.dragFromSlot, to);
       this.dragFromSlot = null;
     });
+
+    this.attachMenuUI();
+  }
+
+  private attachMenuUI(): void {
+    const panel = this.refs.panelMenu;
+    for (const cat of ['master', 'sfx', 'voice', 'ambient', 'music'] as const) {
+      const el = panel.querySelector<HTMLInputElement>(`[data-vol="${cat}"]`)!;
+      el.addEventListener('input', () => this.onSetVolume?.(cat, Number(el.value) / 100));
+    }
+    const sensEl = panel.querySelector<HTMLInputElement>('[data-sens]')!;
+    sensEl.addEventListener('input', () => {
+      const sensitivity = 0.0005 + (Number(sensEl.value) / 100) * 0.0055;
+      this.onSetSensitivity?.(sensitivity);
+    });
+    const diffEl = panel.querySelector<HTMLSelectElement>('[data-difficulty]')!;
+    diffEl.addEventListener('change', () => this.onSetDifficulty?.(diffEl.value as Difficulty));
+    const motionEl = panel.querySelector<HTMLInputElement>('[data-reduce-motion]')!;
+    motionEl.addEventListener('change', () => this.onSetReduceMotion?.(motionEl.checked));
+
+    for (const btn of Array.from(panel.querySelectorAll<HTMLButtonElement>('[data-rebind]'))) {
+      btn.addEventListener('click', () => {
+        const action = btn.dataset.rebind as RemappableAction;
+        this.rebindArming = action;
+        const prevText = btn.textContent;
+        btn.textContent = '...';
+        const onKey = (e: KeyboardEvent) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (e.key.toLowerCase() === 'escape') {
+            btn.textContent = prevText;
+          } else {
+            const key = e.key.toLowerCase();
+            this.onRebindKey?.(action, key);
+            btn.textContent = key === ' ' ? 'SPACE' : key.toUpperCase();
+          }
+          this.rebindArming = null;
+          window.removeEventListener('keydown', onKey, true);
+        };
+        window.addEventListener('keydown', onKey, true);
+      });
+    }
+
+    panel.querySelector('[data-act="export-save"]')!.addEventListener('click', () => this.onExportSave?.());
+    const fileInput = panel.querySelector<HTMLInputElement>('[data-import-file]')!;
+    panel.querySelector('[data-act="import-save"]')!.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', () => {
+      const file = fileInput.files?.[0];
+      if (file) this.onImportSave?.(file);
+      fileInput.value = '';
+    });
+
+    panel.querySelector('[data-act="resume"]')!.addEventListener('click', () => this.onResume?.());
+    panel.querySelector('[data-act="mainmenu"]')!.addEventListener('click', () => this.onMainMenu?.());
   }
 
   getPanel(): HUDState['currentPanel'] { return this.currentPanel; }

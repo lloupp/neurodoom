@@ -29,11 +29,23 @@ export function lightLevelAt(tiles: string[], cell: number, x: number, y: number
   return clamp(light, 0.25, 1);
 }
 
+export type EnemyKind = 'drone' | 'heavy' | 'ghost' | 'turret' | 'boss';
+
+/** Max HP / base speed / armor multiplier per enemy kind. `ghost` is a fast,
+ *  fragile harasser (high-frequency low-damage melee-range attacks, flickers
+ *  in the renderer); `turret` is a stationary, armored gun emplacement with
+ *  long engagement range and zero patrol/chase movement; `boss` is a
+ *  one-off climactic encounter — slow but heavily armored, hits hard at
+ *  range, and its death is the game's win condition (see Game.update). */
+const MAX_HP: Record<EnemyKind, number> = { drone: 30, heavy: 70, ghost: 18, turret: 90, boss: 220 };
+const BASE_SPEED: Record<EnemyKind, number> = { drone: 1.7, heavy: 1.3, ghost: 2.6, turret: 0, boss: 1.1 };
+const ARMOR: Record<EnemyKind, number> = { drone: 1, heavy: 0.75, ghost: 1.3, turret: 0.6, boss: 0.5 };
+
 export interface EnemySnapshot {
   id: number;
   position: { x: number; y: number };
   angle: number;
-  kind: 'drone' | 'heavy';
+  kind: EnemyKind;
   hp: number;
   state: EnemyState;
   awareness: number;
@@ -43,7 +55,7 @@ export interface EnemySnapshot {
 
 interface InternalEnemy {
   id: number;
-  kind: 'drone' | 'heavy';
+  kind: EnemyKind;
   hp: number;
   position: { x: number; y: number };
   angle: number;
@@ -61,15 +73,19 @@ export class EnemySystem {
   private nextId = 100;
   private enemies: InternalEnemy[] = [];
   private timeTick = 0;
+  private damageMultiplier = 1;
 
   constructor(private readonly level: LevelData, private readonly player: Player) {}
 
-  spawn(kind: 'drone' | 'heavy', x: number, y: number, patrol: Array<[number, number]>): number {
+  /** Difficulty lever: scales damage enemies deal to the player (SPEC 4.4 combat). */
+  setDamageMultiplier(mult: number): void { this.damageMultiplier = mult; }
+
+  spawn(kind: EnemyKind, x: number, y: number, patrol: Array<[number, number]>): number {
     const id = this.nextId++;
     this.enemies.push({
       id,
       kind,
-      hp: kind === 'drone' ? 30 : 70,
+      hp: MAX_HP[kind],
       position: { x, y },
       angle: 0,
       state: 'IDLE',
@@ -109,19 +125,26 @@ export class EnemySystem {
       const dy = e.position.y - (y + 0.5);
       const r2 = radius * radius;
       if (dx * dx + dy * dy <= r2 && e.state !== 'DEAD') {
-        const armor = e.kind === 'heavy' ? 0.75 : 1; // heavies are armored, drones aren't
-        e.hp -= amount * armor;
+        e.hp -= amount * ARMOR[e.kind];
         e.position.x += Math.cos(knockDir) * 0.06;
         e.position.y += Math.sin(knockDir) * 0.06;
         if (e.hp <= 0) {
           e.state = 'DEAD';
-          // Loot on death (SPEC 4.4): credits always; ammo from armored heavies,
-          // medkits from drones; heavies also carry a keycard.
+          // Loot on death (SPEC 4.4 + new kinds): credits from everything;
+          // medkits from drones, ammo from heavies/turrets, keycards from
+          // heavies only; ghosts are scavenged husks (credits only).
           const pos = { ...e.position };
-          loot.push({ position: { ...pos }, kind: e.kind === 'heavy' ? 'ammo' : 'medkit' });
+          if (e.kind === 'drone') {
+            loot.push({ position: { ...pos }, kind: 'medkit' });
+          } else if (e.kind === 'heavy' || e.kind === 'turret') {
+            loot.push({ position: { ...pos }, kind: 'ammo' });
+          } else if (e.kind === 'boss') {
+            loot.push({ position: { ...pos }, kind: 'medkit' });
+            loot.push({ position: { ...pos }, kind: 'ammo' });
+          }
           loot.push({ position: { ...pos }, kind: 'credits' });
-          if (e.kind === 'heavy') loot.push({ position: { ...pos }, kind: 'keycard' });
-        } else if (e.hp < (e.kind === 'drone' ? 30 : 70) * 0.25 && e.state !== 'RETREAT') {
+          if (e.kind === 'heavy' || e.kind === 'boss') loot.push({ position: { ...pos }, kind: 'keycard' });
+        } else if (e.hp < MAX_HP[e.kind] * 0.25 && e.state !== 'RETREAT') {
           e.state = 'RETREAT';
           e.retreatUntil = 2.5;
         }
@@ -193,7 +216,11 @@ export class EnemySystem {
       }
 
       // Speed/behavior per state
-      const baseSpeed = e.kind === 'drone' ? 1.7 : 1.3;
+      const baseSpeed = BASE_SPEED[e.kind];
+      // Ghosts harass at melee range; turrets are stationary but engage from
+      // afar; drones/heavies keep the original close-quarters thresholds.
+      const engageRange = e.kind === 'turret' ? 9 : e.kind === 'ghost' ? 1.6 : e.kind === 'boss' ? 3.5 : 2.5;
+      const sustainRange = e.kind === 'turret' ? 11 : e.kind === 'ghost' ? 2.6 : e.kind === 'boss' ? 6 : 4;
       let speed = 0;
       let targetAngle = e.angle;
       switch (e.state) {
@@ -224,7 +251,7 @@ export class EnemySystem {
           const pdx = player.position.x - e.position.x;
           const pdy = player.position.y - e.position.y;
           targetAngle = Math.atan2(pdy, pdx);
-          if (dist < 2.5 && this.lineOfSight(e.position, player.position)) {
+          if (dist < engageRange && this.lineOfSight(e.position, player.position)) {
             e.state = 'ATTACK';
             e.attackCooldown = 0;
             callbacks.onAttack?.(e);
@@ -232,7 +259,7 @@ export class EnemySystem {
           break;
         }
         case 'ATTACK': {
-          if (dist > 4 || !this.lineOfSight(e.position, player.position)) {
+          if (dist > sustainRange || !this.lineOfSight(e.position, player.position)) {
             e.state = 'CHASE';
             break;
           }
@@ -242,8 +269,9 @@ export class EnemySystem {
           if (e.attackCooldown <= 0) {
             // Fire at player hitscan — caller hooks emissive red tracer
             callbacks.onShootAt?.(e, { x: player.position.x, y: player.position.y });
-            e.attackCooldown = e.kind === 'drone' ? 0.6 : 0.9;
-            this.player.damage(e.kind === 'heavy' ? 6 : 3);
+            e.attackCooldown = e.kind === 'drone' ? 0.6 : e.kind === 'heavy' ? 0.9 : e.kind === 'turret' ? 1.3 : e.kind === 'boss' ? 1.1 : 0.35;
+            const dmg = e.kind === 'heavy' ? 6 : e.kind === 'turret' ? 9 : e.kind === 'boss' ? 14 : e.kind === 'ghost' ? 4 : 3;
+            this.player.damage(dmg * this.damageMultiplier);
           }
           break;
         }

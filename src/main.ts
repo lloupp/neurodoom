@@ -1,5 +1,8 @@
 import './style.css';
+import { installGlobalErrorLogging } from './engine';
 import { Game } from './game';
+
+installGlobalErrorLogging();
 
 const root = document.getElementById('root')!;
 
@@ -95,13 +98,64 @@ const panelInventory = makePanel('panel-inventory', `
   <div data-inv-grid></div>
 `);
 
+const panelMenu = makePanel('panel-menu', `
+  <header><span>PAUSED // OPTIONS</span></header>
+  <div class="menu-grid">
+    <section>
+      <h3>Audio</h3>
+      <label>Master <input type="range" min="0" max="100" value="100" data-vol="master"></label>
+      <label>SFX <input type="range" min="0" max="100" value="100" data-vol="sfx"></label>
+      <label>Voice <input type="range" min="0" max="100" value="100" data-vol="voice"></label>
+      <label>Ambient <input type="range" min="0" max="100" value="100" data-vol="ambient"></label>
+      <label>Music <input type="range" min="0" max="100" value="100" data-vol="music"></label>
+    </section>
+    <section>
+      <h3>Controls</h3>
+      <label>Mouse sensitivity <input type="range" min="1" max="100" value="31" data-sens></label>
+      <div class="rebind-list">
+        <div class="rebind-row"><span>Forward</span><button data-rebind="forward">W</button></div>
+        <div class="rebind-row"><span>Backward</span><button data-rebind="backward">S</button></div>
+        <div class="rebind-row"><span>Strafe Left</span><button data-rebind="strafeL">A</button></div>
+        <div class="rebind-row"><span>Strafe Right</span><button data-rebind="strafeR">D</button></div>
+        <div class="rebind-row"><span>Jump</span><button data-rebind="jump">SPACE</button></div>
+        <div class="rebind-row"><span>Crouch</span><button data-rebind="crouch">CTRL</button></div>
+        <div class="rebind-row"><span>Interact</span><button data-rebind="interact">E</button></div>
+        <div class="rebind-row"><span>Inventory</span><button data-rebind="inventoryToggle">I</button></div>
+      </div>
+    </section>
+    <section>
+      <h3>Gameplay</h3>
+      <label>Difficulty
+        <select data-difficulty>
+          <option value="easy">Easy</option>
+          <option value="normal" selected>Normal</option>
+          <option value="hard">Hard</option>
+        </select>
+      </label>
+      <label><input type="checkbox" data-reduce-motion> Reduce camera motion (headbob)</label>
+    </section>
+    <section>
+      <h3>Save</h3>
+      <div style="display:flex;gap:8px">
+        <button data-act="export-save">EXPORT SAVE</button>
+        <button data-act="import-save">IMPORT SAVE</button>
+        <input type="file" data-import-file accept="application/json" hidden>
+      </div>
+    </section>
+  </div>
+  <div style="display:flex;justify-content:center;gap:8px;margin-top:18px">
+    <button data-act="resume">// RESUME</button>
+    <button data-act="mainmenu">// MAIN MENU</button>
+  </div>
+`);
+
 // Boot
 const boot = document.createElement('div');
 boot.id = 'boot';
 boot.innerHTML = `
   <p>// NEURODOOM</p>
   <h1>NEURODOOM</h1>
-  <p>Cyberpunk immersive-sim FPS — System Shock meets Doom, in the browser.</p>
+  <p>Cyberpunk immersive-sim FPS — visceral combat meets deep systemic simulation.</p>
   <div style="display:flex;gap:16px;justify-content:center">
     <button data-act="newgame">// NEW RUN</button>
     <button data-act="continue" hidden>// CONTINUE</button>
@@ -123,6 +177,19 @@ dead.innerHTML = `
   </div>
 `;
 
+// Win / ending
+const win = document.createElement('div');
+win.className = 'panel';
+win.id = 'win';
+win.hidden = true;
+win.innerHTML = `
+  <h2>SHIVA SEVERED</h2>
+  <p>The warden falls silent. You jack out, for now.</p>
+  <div style="display:flex;justify-content:center;gap:8px;margin-top:18px">
+    <button data-act="menu">// MAIN MENU</button>
+  </div>
+`;
+
 // Mount order matters: bottom → top
 root.appendChild(worldCanvas);
 root.appendChild(spriteCanvas);
@@ -135,8 +202,10 @@ root.appendChild(panelTerminal);
 root.appendChild(panelHack);
 root.appendChild(panelLogs);
 root.appendChild(panelInventory);
+root.appendChild(panelMenu);
 root.appendChild(boot);
 root.appendChild(dead);
+root.appendChild(win);
 
 const prompt = hud.querySelector<HTMLElement>('#prompt')!;
 
@@ -148,11 +217,13 @@ const game = new Game({
   hud,
   boot,
   dead,
+  win,
   prompt,
   panelTerminal,
   panelHack,
   panelLogs,
   panelInventory,
+  panelMenu,
 });
 
 void game.beginWithMenu();

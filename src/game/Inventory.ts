@@ -1,8 +1,8 @@
 import { WEAPONS, type WeaponId } from './Player';
 
 export const HOT_SLOTS = 12;
-export const WEAPON_SLOTS = 4; // SPEC 4.5: "12 hot + 4 weapon" (4th is reserved)
-export const WEAPON_ORDER: WeaponId[] = ['pistol', 'shotgun', 'pulse_rifle'];
+export const WEAPON_SLOTS = 4; // SPEC 4.5: "12 hot + 4 weapon"
+export const WEAPON_ORDER: WeaponId[] = ['pistol', 'shotgun', 'pulse_rifle', 'rocket_launcher'];
 
 /** Renders the 12 hot-item slots + 4 weapon slots (SPEC 4.5) into the inventory
  *  panel's slot grid. Filled hot slots are draggable to support drag-drop

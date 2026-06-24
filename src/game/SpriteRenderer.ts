@@ -17,13 +17,15 @@ export interface SpriteRef {
   position: { x: number; y: number };
   /** Squared distance from camera (used for ordering & size). */
   dist: number;
-  type: 'enemy' | 'item';
+  type: 'enemy' | 'item' | 'projectile';
   /** Index into atlas for that sprite type. */
   index: number;
   /** Optional anim frame tick. */
   frame?: number;
   /** If non-zero, blink in/out (e.g., ghost spawn). */
   flicker?: number;
+  /** Size multiplier on top of the standard distance-based projection (e.g. boss). */
+  scale?: number;
 }
 
 /** Camera-relative projection for a single billboard entity. */
@@ -93,7 +95,7 @@ export class SpriteRenderer {
     const behind = Math.abs(bearing) > Math.PI / 2 + cam.fov / 2;
 
     // Distance scaling for size
-    const scale = 1 / dist;
+    const scale = (1 / dist) * (s.scale ?? 1);
     const heightPx = (this.height * scale) * 0.9;
     const widthPx = heightPx;
 
@@ -122,7 +124,7 @@ export class SpriteRenderer {
     cam: CameraState,
     zBuffer: Float32Array,
     sprites: SpriteRef[],
-    atlas: { enemies: HTMLCanvasElement[]; items: HTMLCanvasElement[]; weapons: HTMLCanvasElement[] },
+    atlas: { enemies: HTMLCanvasElement[]; items: HTMLCanvasElement[]; weapons: HTMLCanvasElement[]; projectiles: HTMLCanvasElement[] },
   ): void {
     void this._assets;
     this.ctx.clearRect(0, 0, this.width, this.height);
@@ -142,7 +144,7 @@ export class SpriteRenderer {
       if (proj.occluded) continue;
       if (proj.xCenter < -proj.width || proj.xCenter > this.width + proj.width) continue;
 
-      const atlasArr = s.type === 'enemy' ? atlas.enemies : s.type === 'item' ? atlas.items : atlas.weapons;
+      const atlasArr = s.type === 'enemy' ? atlas.enemies : s.type === 'item' ? atlas.items : s.type === 'projectile' ? atlas.projectiles : atlas.weapons;
       const img = atlasArr[s.index];
       if (!img) continue;
       const alpha = s.flicker ? ((Date.now() % 200) < 100 ? s.flicker : 0) : 1;

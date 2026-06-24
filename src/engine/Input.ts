@@ -24,9 +24,35 @@ const emptyState = (): InputState => ({
   mouseDX: 0, mouseDY: 0,
 });
 
+/** Keyboard actions a player can rebind in the options menu. Movement keys
+ *  keep their arrow-key fallback regardless of the bound primary key. */
+export type RemappableAction =
+  | 'forward' | 'backward' | 'strafeL' | 'strafeR'
+  | 'jump' | 'crouch' | 'interact' | 'inventoryToggle' | 'pause';
+
+const EDGE_ACTIONS: readonly RemappableAction[] = ['interact', 'inventoryToggle', 'pause'];
+
+export const DEFAULT_BINDINGS: Record<RemappableAction, string> = {
+  forward: 'w', backward: 's', strafeL: 'a', strafeR: 'd',
+  jump: ' ', crouch: 'control', interact: 'e', inventoryToggle: 'i', pause: 'escape',
+};
+
+const BINDINGS_KEY = 'neurodoom:keybindings';
+
+function loadBindings(): Record<RemappableAction, string> {
+  try {
+    const raw = localStorage.getItem(BINDINGS_KEY);
+    if (raw) return { ...DEFAULT_BINDINGS, ...JSON.parse(raw) };
+  } catch {
+    // ignore corrupt/unavailable storage
+  }
+  return { ...DEFAULT_BINDINGS };
+}
+
 export class Input {
   readonly state: InputState = emptyState();
   private readonly pressed = new Set<string>();
+  private keyBindings: Record<RemappableAction, string> = loadBindings();
 
   private readonly domTarget: HTMLElement;
   private locked = false;
@@ -52,21 +78,41 @@ export class Input {
 
   isLocked(): boolean { return this.locked; }
 
+  getBindings(): Record<RemappableAction, string> { return { ...this.keyBindings }; }
+
+  /** Binds `key` to `action`. If another action already used that key, the
+   *  two actions swap keys instead of ending up bound to the same one. */
+  setBinding(action: RemappableAction, key: string): void {
+    const normalized = key.toLowerCase();
+    const previousKey = this.keyBindings[action];
+    const conflicting = (Object.keys(this.keyBindings) as RemappableAction[])
+      .find((a) => a !== action && this.keyBindings[a] === normalized);
+    if (conflicting) this.keyBindings[conflicting] = previousKey;
+    this.keyBindings[action] = normalized;
+    try { localStorage.setItem(BINDINGS_KEY, JSON.stringify(this.keyBindings)); } catch { /* best-effort */ }
+  }
+
+  resetBindings(): void {
+    this.keyBindings = { ...DEFAULT_BINDINGS };
+    try { localStorage.setItem(BINDINGS_KEY, JSON.stringify(this.keyBindings)); } catch { /* best-effort */ }
+  }
+
   /** Read & clear per-frame edge flags. Continuous flags stay live. */
   consume(): InputState {
     const out: InputState = { ...this.state };
+    const b = this.keyBindings;
     // Re-read movement from key set
-    out.forward  = (this.pressed.has('w') || this.pressed.has('arrowup')) ? 1 : 0;
-    out.backward = (this.pressed.has('s') || this.pressed.has('arrowdown')) ? 1 : 0;
-    out.strafeL  = (this.pressed.has('a') || this.pressed.has('arrowleft')) ? 1 : 0;
-    out.strafeR  = (this.pressed.has('d') || this.pressed.has('arrowright')) ? 1 : 0;
-    out.jump  = this.pressed.has(' ');
-    out.crouch = this.pressed.has('control') || this.pressed.has('shift');
+    out.forward  = (this.pressed.has(b.forward) || this.pressed.has('arrowup')) ? 1 : 0;
+    out.backward = (this.pressed.has(b.backward) || this.pressed.has('arrowdown')) ? 1 : 0;
+    out.strafeL  = (this.pressed.has(b.strafeL) || this.pressed.has('arrowleft')) ? 1 : 0;
+    out.strafeR  = (this.pressed.has(b.strafeR) || this.pressed.has('arrowright')) ? 1 : 0;
+    out.jump  = this.pressed.has(b.jump);
+    out.crouch = this.pressed.has(b.crouch) || this.pressed.has('shift');
     out.fire  = this.pressed.has('mouse0') || this.pressed.has('control');
     out.aim   = this.pressed.has('mouse2');
-    out.inventoryToggle = this.pressed.delete('i-pressed'); // edge-triggered
-    out.pause = this.pressed.delete('escape-pressed');
-    out.interact = this.pressed.delete('e-pressed');
+    out.inventoryToggle = this.pressed.delete(`${b.inventoryToggle}-pressed`);
+    out.pause = this.pressed.delete(`${b.pause}-pressed`);
+    out.interact = this.pressed.delete(`${b.interact}-pressed`);
     for (let i = 1; i <= 6; i++) {
       const k = `digit${i}-pressed`;
       if (this.pressed.delete(k)) out.use = i;
@@ -78,9 +124,9 @@ export class Input {
     const onKeyDown = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
       if (!this.pressed.has(key)) {
-        if (key === 'e') this.pressed.add('e-pressed');
-        if (key === 'i') this.pressed.add('i-pressed');
-        if (key === 'escape') this.pressed.add('escape-pressed');
+        for (const action of EDGE_ACTIONS) {
+          if (this.keyBindings[action] === key) this.pressed.add(`${key}-pressed`);
+        }
       }
       if (/^[1-6]$/.test(e.key)) this.pressed.add(`digit${e.key}-pressed`);
       this.pressed.add(key);

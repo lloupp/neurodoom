@@ -56,6 +56,34 @@ const level1: MapManifest = {
       ],
       sight: 7,
     },
+    {
+      kind: 'ghost',
+      x: 27,
+      y: 4,
+      patrol: [
+        [26, 2],
+        [29, 2],
+        [29, 8],
+        [26, 8],
+      ],
+      sight: 6,
+    },
+    {
+      kind: 'turret',
+      x: 27,
+      y: 17,
+      patrol: [],
+      sight: 9,
+    },
+    {
+      // SHIVA's warden — sealed behind door_secure_lab, the run's climactic
+      // encounter. Killing it ends the run (see Game.update's win check).
+      kind: 'boss',
+      x: 20,
+      y: 14,
+      patrol: [],
+      sight: 10,
+    },
   ],
   interactables: [
     { id: 'door_entry_to_corridor', kind: 'door', x: 7, y: 1, locked: false, unlockFlag: undefined },
@@ -91,6 +119,14 @@ const level1: MapManifest = {
   ],
   triggers: [
     { x: 14, y: 12, type: 'spawn_ghost', data: { kind: 'heavy' } },
+  ],
+  zones: [
+    { x: 0, y: 0, w: 8, h: 19, name: 'Holding Cell — Subject 14' },
+    { x: 8, y: 0, w: 8, h: 19, name: 'Research Annex' },
+    { x: 16, y: 0, w: 16, h: 3, name: 'Sublevel Access Corridor' },
+    { x: 16, y: 3, w: 8, h: 8, name: 'Lab 2 — SHIVA Relay' },
+    { x: 16, y: 11, w: 8, h: 8, name: 'Secure Lab — Warden’s Vault' },
+    { x: 24, y: 3, w: 8, h: 16, name: 'East Wing' },
   ],
 };
 

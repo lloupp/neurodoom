@@ -257,6 +257,38 @@ canvas {
 #panel-inventory [data-inv-grid] .slot.weapon-slot.active { background: rgba(170, 255, 57, 0.18); box-shadow: 0 0 10px rgba(170, 255, 57, 0.4); }
 #panel-inventory [data-inv-grid] .slot.reserved { opacity: 0.35; cursor: default; }
 
+/* === Options/pause menu === */
+#panel-menu { min-width: 520px; }
+#panel-menu .menu-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 18px 28px;
+}
+#panel-menu section { display: flex; flex-direction: column; gap: 10px; }
+#panel-menu h3 {
+  margin: 0 0 4px; font-size: 12px; color: var(--neon-cyan);
+  letter-spacing: 0.12em; border-bottom: 1px dashed rgba(75, 227, 255, 0.3);
+  padding-bottom: 4px;
+}
+#panel-menu label {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; font-size: 12px; color: var(--ink-dim);
+}
+#panel-menu input[type="range"] { flex: 1; max-width: 160px; accent-color: var(--neon-cyan); }
+#panel-menu select {
+  background: var(--bg-1); color: var(--ink); border: 1px solid var(--neon-cyan);
+  padding: 2px 6px; font-family: var(--font-display); text-transform: uppercase;
+}
+#panel-menu .rebind-list { display: flex; flex-direction: column; gap: 4px; }
+#panel-menu .rebind-row {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 11px; color: var(--ink-dim);
+}
+#panel-menu .rebind-row button {
+  background: rgba(75, 227, 255, 0.08); border: 1px solid var(--neon-cyan);
+  color: var(--neon-cyan); font-family: var(--font-mono); font-size: 11px;
+  padding: 3px 10px; cursor: pointer; min-width: 64px;
+}
+#panel-menu .rebind-row button:hover { background: var(--neon-cyan); color: var(--bg-0); }
+
 /* === Boot screen === */
 #boot {
   position: absolute; inset: 0;
@@ -294,6 +326,17 @@ canvas {
 #dead h2 { color: var(--neon-red); margin: 0 0 14px; letter-spacing: 0.15em; }
 #dead button { color: var(--neon-red); border-color: var(--neon-red); }
 #dead button:hover { background: var(--neon-red); color: var(--bg-0); }
+
+/* === Win/ending screen === */
+#win {
+  background: rgba(0, 20, 8, 0.92);
+  border-color: var(--neon-toxic);
+  box-shadow: 0 0 0 1px rgba(170, 255, 57, 0.4), 0 0 40px rgba(170, 255, 57, 0.3);
+  text-align: center;
+}
+#win h2 { color: var(--neon-toxic); margin: 0 0 14px; letter-spacing: 0.15em; }
+#win button { color: var(--neon-toxic); border-color: var(--neon-toxic); }
+#win button:hover { background: var(--neon-toxic); color: var(--bg-0); }
 
 /* === Post-processing overlays === */
 #fx-scanlines, #fx-vignette, #fx-chroma {

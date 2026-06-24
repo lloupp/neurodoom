@@ -22,7 +22,7 @@ export interface PlayerSnapshot extends CameraState {
   bobPhase: number;
 }
 
-export type WeaponId = 'pistol' | 'shotgun' | 'pulse_rifle';
+export type WeaponId = 'pistol' | 'shotgun' | 'pulse_rifle' | 'rocket_launcher';
 
 export interface WeaponDef {
   id: WeaponId;
@@ -34,14 +34,21 @@ export interface WeaponDef {
   range: number;          // tiles
   recoilPitch: number;    // visual kick
   recoilYaw: number;
-  ammoType: 'light' | 'heavy' | 'energy' | 'none';
+  ammoType: 'light' | 'heavy' | 'energy' | 'rocket' | 'none';
   ammoCapacity: number;
+  /** Set only for projectile weapons (tiles/s travel speed). Their shot is a
+   *  physical entity advanced frame-by-frame by Game.updateProjectiles()
+   *  instead of resolved instantly via MapRenderer.hitscan(). */
+  projectileSpeed?: number;
+  /** Blast radius (tiles) for splash damage on impact. */
+  splashRadius?: number;
 }
 
 export const WEAPONS: Record<WeaponId, WeaponDef> = {
-  pistol:      { id: 'pistol',      name: 'VanBrck-7 Pistol',  damage: 18, fireRate: 4,  spread: 0.012, pellets: 1, range: 22, recoilPitch: 0.04, recoilYaw: 0.02, ammoType: 'light', ammoCapacity: 12 },
-  shotgun:     { id: 'shotgun',     name: 'HX Disruptor',      damage: 9,  fireRate: 1.4,spread: 0.18,  pellets: 8, range: 12, recoilPitch: 0.08, recoilYaw: 0.05, ammoType: 'heavy', ammoCapacity: 6 },
-  pulse_rifle: { id: 'pulse_rifle', name: 'SHIVA Pulse Cannon', damage: 24, fireRate: 7,  spread: 0.02,  pellets: 1, range: 28, recoilPitch: 0.05, recoilYaw: 0.025,ammoType: 'energy', ammoCapacity: 30 },
+  pistol:          { id: 'pistol',          name: 'VanBrck-7 Pistol',   damage: 18, fireRate: 4,  spread: 0.012, pellets: 1, range: 22, recoilPitch: 0.04, recoilYaw: 0.02,  ammoType: 'light',  ammoCapacity: 12 },
+  shotgun:         { id: 'shotgun',         name: 'HX Disruptor',       damage: 9,  fireRate: 1.4,spread: 0.18,  pellets: 8, range: 12, recoilPitch: 0.08, recoilYaw: 0.05,  ammoType: 'heavy',  ammoCapacity: 6 },
+  pulse_rifle:     { id: 'pulse_rifle',     name: 'SHIVA Pulse Cannon', damage: 24, fireRate: 7,  spread: 0.02,  pellets: 1, range: 28, recoilPitch: 0.05, recoilYaw: 0.025, ammoType: 'energy', ammoCapacity: 30 },
+  rocket_launcher: { id: 'rocket_launcher', name: 'M-90 Fragline',      damage: 65, fireRate: 0.9,spread: 0.015, pellets: 1, range: 16, recoilPitch: 0.14, recoilYaw: 0.06,  ammoType: 'rocket', ammoCapacity: 4, projectileSpeed: 9, splashRadius: 2.2 },
 };
 
 export class Player {
@@ -52,7 +59,7 @@ export class Player {
   fov: number;
   stats: PlayerStats;
   weapon: WeaponId = 'pistol';
-  ammo: Record<WeaponId, number> = { pistol: 36, shotgun: 12, pulse_rifle: 60 };
+  ammo: Record<WeaponId, number> = { pistol: 36, shotgun: 12, pulse_rifle: 60, rocket_launcher: 4 };
   readonly inventory = new Set<string>();
   isMoving = false;
   bobPhase = 0;
@@ -236,7 +243,7 @@ export class Player {
     return { fired, weaponId: fired ? this.weapon : undefined, recoil };
   }
 
-  /** Switch ammo/active weapon. `use` is 1..6 from 1–6 keys (mapping: 1=pistol 2=shotgun 3=pulseRifle). */
+  /** Switch ammo/active weapon. `use` is 1..6 from 1–6 keys (mapping: 1=pistol 2=shotgun 3=pulseRifle 4=rocketLauncher). */
   setWeapon(id: WeaponId): void {
     this.weapon = id;
   }

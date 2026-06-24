@@ -3,7 +3,8 @@ import { loadLevel } from '../src/engine/LevelLoader';
 import { collidesAt, surfaceAt } from '../src/game/Level';
 import { TerminalSystem, parseTags } from '../src/game/Terminal';
 import { EnemySystem, lightLevelAt } from '../src/game/Enemy';
-import { Player } from '../src/game/Player';
+import { Player, WEAPONS } from '../src/game/Player';
+import { WEAPON_ORDER, WEAPON_SLOTS } from '../src/game/Inventory';
 import level1 from '../src/game/levels/Level1';
 
 describe('Terminal log lexer (SPEC 4.7)', () => {
@@ -163,5 +164,69 @@ describe('Surface-based footstep palette (SPEC 4.2)', () => {
     expect(surfaceAt(tiles, cellSize, 24.5, 9.5)).toBe('metal');
     expect(surfaceAt(tiles, cellSize, 26.5, 9.5)).toBe('organic');
     expect(surfaceAt(tiles, cellSize, 2.5, 2.5)).toBe('concrete');
+  });
+});
+
+describe('Rocket launcher weapon definition', () => {
+  it('is a projectile weapon with splash radius, occupying the 4th weapon slot', () => {
+    const rl = WEAPONS.rocket_launcher;
+    expect(rl.projectileSpeed).toBeGreaterThan(0);
+    expect(rl.splashRadius).toBeGreaterThan(1);
+    expect(rl.ammoType).toBe('rocket');
+    expect(WEAPON_ORDER).toContain('rocket_launcher');
+    expect(WEAPON_ORDER).toHaveLength(WEAPON_SLOTS);
+  });
+});
+
+describe('New enemy kinds (ghost, turret)', () => {
+  it('ghost is fast and fragile, dropping only credits on death', () => {
+    const loaded = loadLevel(level1);
+    const player = new Player({ x: 2.5, y: 2.5, face: 0 });
+    const enemies = new EnemySystem(loaded, player);
+    enemies.spawn('ghost', 5, 5, []);
+    const before = enemies.snapshots()[0];
+    expect(before.hp).toBeLessThan(30); // fragile: less max hp than a drone
+
+    const { loot } = enemies.damageAtTile(5, 5, 1, 100, 0);
+    expect(loot).toEqual([{ position: expect.anything(), kind: 'credits' }]);
+  });
+
+  it('turret never moves regardless of how many AI ticks elapse', () => {
+    const loaded = loadLevel(level1);
+    const player = new Player({ x: 2.5, y: 2.5, face: 0 });
+    const enemies = new EnemySystem(loaded, player);
+    const id = enemies.spawn('turret', 6, 6, []);
+    const start = enemies.snapshots().find((e) => e.id === id)!.position;
+    for (let i = 0; i < 60; i++) enemies.update(1 / 30, {});
+    const end = enemies.snapshots().find((e) => e.id === id)!.position;
+    expect(end).toEqual(start);
+  });
+
+  it('turret is armored (takes reduced damage) and drops ammo + credits on death', () => {
+    const loaded = loadLevel(level1);
+    const player = new Player({ x: 2.5, y: 2.5, face: 0 });
+    const enemies = new EnemySystem(loaded, player);
+    enemies.spawn('turret', 6, 6, []);
+    const { hits } = enemies.damageAtTile(6, 6, 1, 30, 0);
+    // Armor < 1 means a 30-damage hit leaves more than (90-30) hp.
+    expect(hits[0].hp).toBeGreaterThan(60);
+
+    const { loot } = enemies.damageAtTile(6, 6, 1, 1000, 0);
+    expect(loot.map((l) => l.kind).sort()).toEqual(['ammo', 'credits']);
+  });
+});
+
+describe('Splash damage radius (rocket launcher, reuses EnemySystem.damageAtTile)', () => {
+  it('hits every enemy within the blast radius and spares one standing further away', () => {
+    const loaded = loadLevel(level1);
+    const player = new Player({ x: 2.5, y: 2.5, face: 0 });
+    const enemies = new EnemySystem(loaded, player);
+    enemies.spawn('drone', 10, 10, []);
+    enemies.spawn('drone', 11, 10, []);
+    enemies.spawn('drone', 20, 20, []); // far outside the blast radius
+
+    const { hits } = enemies.damageAtTile(10, 10, 2.2, 10, 0);
+    expect(hits).toHaveLength(2);
+    expect(hits.every((h) => h.position.x < 15)).toBe(true);
   });
 });

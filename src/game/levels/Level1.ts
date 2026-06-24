@@ -56,6 +56,25 @@ const level1: MapManifest = {
       ],
       sight: 7,
     },
+    {
+      kind: 'ghost',
+      x: 27,
+      y: 4,
+      patrol: [
+        [26, 2],
+        [29, 2],
+        [29, 8],
+        [26, 8],
+      ],
+      sight: 6,
+    },
+    {
+      kind: 'turret',
+      x: 27,
+      y: 17,
+      patrol: [],
+      sight: 9,
+    },
   ],
   interactables: [
     { id: 'door_entry_to_corridor', kind: 'door', x: 7, y: 1, locked: false, unlockFlag: undefined },

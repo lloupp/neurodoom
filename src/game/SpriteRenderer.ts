@@ -17,7 +17,7 @@ export interface SpriteRef {
   position: { x: number; y: number };
   /** Squared distance from camera (used for ordering & size). */
   dist: number;
-  type: 'enemy' | 'item';
+  type: 'enemy' | 'item' | 'projectile';
   /** Index into atlas for that sprite type. */
   index: number;
   /** Optional anim frame tick. */
@@ -122,7 +122,7 @@ export class SpriteRenderer {
     cam: CameraState,
     zBuffer: Float32Array,
     sprites: SpriteRef[],
-    atlas: { enemies: HTMLCanvasElement[]; items: HTMLCanvasElement[]; weapons: HTMLCanvasElement[] },
+    atlas: { enemies: HTMLCanvasElement[]; items: HTMLCanvasElement[]; weapons: HTMLCanvasElement[]; projectiles: HTMLCanvasElement[] },
   ): void {
     void this._assets;
     this.ctx.clearRect(0, 0, this.width, this.height);
@@ -142,7 +142,7 @@ export class SpriteRenderer {
       if (proj.occluded) continue;
       if (proj.xCenter < -proj.width || proj.xCenter > this.width + proj.width) continue;
 
-      const atlasArr = s.type === 'enemy' ? atlas.enemies : s.type === 'item' ? atlas.items : atlas.weapons;
+      const atlasArr = s.type === 'enemy' ? atlas.enemies : s.type === 'item' ? atlas.items : s.type === 'projectile' ? atlas.projectiles : atlas.weapons;
       const img = atlasArr[s.index];
       if (!img) continue;
       const alpha = s.flicker ? ((Date.now() % 200) < 100 ? s.flicker : 0) : 1;

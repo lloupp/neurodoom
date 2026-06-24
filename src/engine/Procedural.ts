@@ -238,6 +238,22 @@ export function synthFootstep(ctx: AudioContext, surface: 'concrete' | 'metal' |
   return buf;
 }
 
+/** Rocket-launcher blast: a low rumble layered under a fast-decaying noise burst. */
+export function synthExplosion(ctx: AudioContext): AudioBuffer {
+  const sampleRate = ctx.sampleRate;
+  const dur = 0.8;
+  const len = Math.floor(dur * sampleRate);
+  const buf = ctx.createBuffer(1, len, sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) {
+    const t = i / sampleRate;
+    const env = Math.exp(-2.2 * t / dur);
+    const rumble = Math.sin(2 * Math.PI * 50 * t) * 0.4;
+    data[i] = ((Math.random() * 2 - 1) * 0.7 + rumble) * env * 0.7;
+  }
+  return buf;
+}
+
 export function synthPulseRifle(ctx: AudioContext): AudioBuffer {
   const sampleRate = ctx.sampleRate;
   const dur = 0.32;

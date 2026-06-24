@@ -1,5 +1,6 @@
 import { AudioBus } from '../engine/Audio';
-import { synthBlip, synthNoiseBurst, synthAlarmPulse, synthFootstep, synthPulseRifle } from '../engine/Procedural';
+import { synthBlip, synthNoiseBurst, synthAlarmPulse, synthFootstep, synthPulseRifle, synthExplosion } from '../engine/Procedural';
+import type { WeaponId } from './Player';
 
 export class GameAudio {
   private ambientGain: GainNode | null = null;
@@ -15,6 +16,8 @@ export class GameAudio {
     this.bus.synth('sfx.pistol', (c) => synthBlip(c, 480, 0.06, 'square'));
     this.bus.synth('sfx.shotgun', (c) => synthNoiseBurst(c, 0.22));
     this.bus.synth('sfx.pulse_rifle', (c) => synthPulseRifle(c));
+    this.bus.synth('sfx.rocket_launcher', (c) => synthNoiseBurst(c, 0.3));
+    this.bus.synth('sfx.explosion', (c) => synthExplosion(c));
     this.bus.synth('sfx.footstep.concrete', (c) => synthFootstep(c, 'concrete'));
     this.bus.synth('sfx.footstep.metal', (c) => synthFootstep(c, 'metal'));
     this.bus.synth('sfx.footstep.organic', (c) => synthFootstep(c, 'organic'));
@@ -34,11 +37,17 @@ export class GameAudio {
     this.bus.play('voice.log', { category: 'voice', position: pos, volume: 0.5 });
   }
 
-  playFire(weapon: 'pistol' | 'shotgun' | 'pulse_rifle', pos: { x: number; y: number; z: number }): void {
+  playFire(weapon: WeaponId, pos: { x: number; y: number; z: number }): void {
     const opts = { category: 'sfx' as const, position: pos, volume: 0.6 };
     if (weapon === 'shotgun')      this.bus.play('sfx.shotgun', opts);
-    else if (weapon === 'pulse_rifle') this.bus.play('sfx.pulse_rifle', opts);
+    else if (weapon === 'pulse_rifle')     this.bus.play('sfx.pulse_rifle', opts);
+    else if (weapon === 'rocket_launcher') this.bus.play('sfx.rocket_launcher', opts);
     else                              this.bus.play('sfx.pistol', opts);
+  }
+
+  /** Rocket-launcher detonation (impact or splash), SPEC: Doom-parity arsenal. */
+  playExplosion(pos: { x: number; y: number; z: number }): void {
+    this.bus.play('sfx.explosion', { category: 'sfx', position: pos, volume: 0.8 });
   }
 
   /** SPEC 4.2 — step audio palette by surface; defaults to concrete. */

@@ -12,9 +12,9 @@ import { Input, AudioBus, GameShell, AssetLoader, cell } from '../engine';
 import { loadLevel } from '../engine/LevelLoader';
 import { MapRenderer } from './MapRenderer';
 import { SpriteRenderer, type SpriteRef } from './SpriteRenderer';
-import { Player, WEAPONS, type WeaponId } from './Player';
-import { EnemySystem, type LootDrop } from './Enemy';
-import { surfaceAt } from './Level';
+import { Player, WEAPONS, type WeaponId, type WeaponDef } from './Player';
+import { EnemySystem, type LootDrop, type EnemyKind } from './Enemy';
+import { surfaceAt, collidesAt } from './Level';
 import { TerminalSystem, type LogTag } from './Terminal';
 import type { MapTrigger } from './MapSchema';
 import { HUD, type HUDRefs } from './HUD';
@@ -22,6 +22,16 @@ import { GameAudio } from './Audio';
 import { generatePuzzle, startHack, tickHack, submitToken, describeProgram } from './Hacking';
 import { writeSlot, readSlot, SAVE_SLOT } from '../engine/Persistence';
 import { listLevels, findLevel } from './levels/registry';
+
+/** A live rocket-launcher shot in flight; advanced each tick by
+ *  Game.updateProjectiles() until it hits a wall, an enemy, or its max range. */
+interface Projectile {
+  position: { x: number; y: number };
+  vx: number;
+  vy: number;
+  weapon: WeaponId;
+  traveled: number;
+}
 
 export interface GameRefs {
   root: HTMLElement;
@@ -60,7 +70,8 @@ export class Game {
   isPaused = false;
   deathAt = 0;
   weaponIndex = 0;
-  weaponOrder: WeaponId[] = ['pistol', 'shotgun', 'pulse_rifle'];
+  weaponOrder: WeaponId[] = ['pistol', 'shotgun', 'pulse_rifle', 'rocket_launcher'];
+  private projectiles: Projectile[] = [];
 
   // reactive cells for HUD refresh
   private readonly ammoCell = cell<{ name: string; clip: number; reserve: number }>({ name: '—', clip: 0, reserve: 0 });
@@ -192,6 +203,7 @@ export class Game {
     if (rawInput.use === 1) this.player.setWeapon('pistol');
     if (rawInput.use === 2) this.player.setWeapon('shotgun');
     if (rawInput.use === 3) this.player.setWeapon('pulse_rifle');
+    if (rawInput.use === 4) this.player.setWeapon('rocket_launcher');
 
     // Move/shoot
     const moveResult = this.player.update(this.levelState.data!, dt, rawInput, {
@@ -214,6 +226,8 @@ export class Game {
     // world.threat: highest enemy awareness drives the adaptive ambient/music mix
     const threat = this.enemySystem.snapshots().reduce((max, e) => Math.max(max, e.state === 'DEAD' ? 0 : e.awareness), 0);
     this.gameAudio.setThreat(threat);
+
+    this.updateProjectiles(dt);
 
     // Persistent tile-coordinate triggers (manifest.triggers) — fire once per trigger when stepped on.
     const playerTileX = Math.floor(this.player.position.x);
@@ -388,7 +402,8 @@ export class Game {
         case 'lock': this.terminalSystem.lockDoor(tag.value); break;
         case 'flag': this.flags.add(tag.value); break;
         case 'spawn': {
-          const kind = tag.value.toLowerCase().includes('heavy') ? 'heavy' : 'drone';
+          const v = tag.value.toLowerCase();
+          const kind: EnemyKind = v.includes('heavy') ? 'heavy' : v.includes('turret') ? 'turret' : v.includes('ghost') ? 'ghost' : 'drone';
           this.enemySystem.spawn(kind, this.player.position.x + 2, this.player.position.y + 2, []);
           break;
         }
@@ -406,7 +421,9 @@ export class Game {
         break;
       }
       case 'spawn_ghost': {
-        const kind = data.kind === 'heavy' ? 'heavy' : 'drone';
+        // Defaults to an actual 'ghost' kind (matching the trigger's own name)
+        // unless data.kind explicitly overrides it.
+        const kind: EnemyKind = data.kind === 'heavy' ? 'heavy' : data.kind === 'turret' ? 'turret' : data.kind === 'drone' ? 'drone' : 'ghost';
         this.enemySystem.spawn(kind, trig.x + 0.5, trig.y + 0.5, []);
         break;
       }
@@ -439,10 +456,26 @@ export class Game {
 
   private handleFire(weapon: WeaponId): void {
     const pos = { x: this.player.position.x, y: this.player.position.y, z: 0 };
-    // Hitscan from center camera at slight random spread
-    const spread = WEAPONS[weapon].spread;
+    const def = WEAPONS[weapon];
+    const spread = def.spread;
     const angle = this.player.angle + (Math.random() - 0.5) * spread;
-    const r = this.renderer.hitscan(this.levelState.data!, this.player.position, angle, WEAPONS[weapon].range);
+
+    // Projectile weapons (rocket launcher) spawn a travelling entity resolved
+    // frame-by-frame in updateProjectiles() instead of an instant hitscan.
+    if (def.projectileSpeed) {
+      this.projectiles.push({
+        position: { x: this.player.position.x, y: this.player.position.y },
+        vx: Math.cos(angle) * def.projectileSpeed,
+        vy: Math.sin(angle) * def.projectileSpeed,
+        weapon,
+        traveled: 0,
+      });
+      this.gameAudio.playFire(weapon, pos);
+      return;
+    }
+
+    // Hitscan from center camera at slight random spread
+    const r = this.renderer.hitscan(this.levelState.data!, this.player.position, angle, def.range);
     if (r.hit) {
       const tileX = Math.floor((r.pos.x + 0.0001) / (this.levelState.data?.manifest.cellSize ?? 1));
       const tileY = Math.floor((r.pos.y + 0.0001) / (this.levelState.data?.manifest.cellSize ?? 1));
@@ -465,6 +498,61 @@ export class Game {
     }
     this.gameAudio.playFire(weapon, pos);
     void pos;
+  }
+
+  /** Advances in-flight projectiles (rocket launcher) and resolves impacts
+   *  against walls (collidesAt) or enemies (proximity check), detonating
+   *  splash damage via explodeProjectile() on either. */
+  private updateProjectiles(dt: number): void {
+    if (!this.projectiles.length) return;
+    const manifest = this.levelState.manifest;
+    if (!manifest) return;
+    const remaining: Projectile[] = [];
+    for (const p of this.projectiles) {
+      const def = WEAPONS[p.weapon];
+      const nx = p.position.x + p.vx * dt;
+      const ny = p.position.y + p.vy * dt;
+      p.traveled += Math.hypot(p.vx * dt, p.vy * dt);
+
+      let exploded = false;
+      if (collidesAt(manifest.tiles, manifest.cellSize, nx, ny, 0.1)) {
+        this.explodeProjectile(p.position, def);
+        exploded = true;
+      } else {
+        for (const e of this.enemySystem.snapshots()) {
+          if (e.state === 'DEAD') continue;
+          if (Math.hypot(e.position.x - nx, e.position.y - ny) < 0.4) {
+            this.explodeProjectile({ x: nx, y: ny }, def);
+            exploded = true;
+            break;
+          }
+        }
+      }
+      if (exploded || p.traveled > def.range) continue;
+      p.position = { x: nx, y: ny };
+      remaining.push(p);
+    }
+    this.projectiles = remaining;
+  }
+
+  /** Splash damage on rocket impact: damages every enemy within splashRadius
+   *  (reusing the same EnemySystem.damageAtTile() the hitscan path uses, just
+   *  with a larger radius) plus a falloff-scaled hit on the player themself —
+   *  Doom-style rocket-jump risk. */
+  private explodeProjectile(pos: { x: number; y: number }, def: WeaponDef): void {
+    this.gameAudio.playExplosion({ x: pos.x, y: pos.y, z: 0 });
+    const radius = def.splashRadius ?? 2;
+    const tileX = Math.floor(pos.x);
+    const tileY = Math.floor(pos.y);
+    const { hits, loot } = this.enemySystem.damageAtTile(tileX, tileY, radius, def.damage, 0);
+    if (hits.length) this.gameAudio.playHit({ x: pos.x, y: pos.y, z: 0 });
+    for (const drop of loot) this.spawnLoot(drop);
+
+    const distToPlayer = Math.hypot(pos.x - this.player.position.x, pos.y - this.player.position.y);
+    if (distToPlayer < radius) {
+      const falloff = 1 - distToPlayer / radius;
+      this.player.damage(def.damage * 0.6 * falloff);
+    }
   }
 
   private handleStep(amp: number): void {
@@ -514,7 +602,19 @@ export class Game {
         position: e.position,
         dist: dx * dx + dy * dy,
         type: 'enemy',
-        index: e.kind === 'drone' ? 0 : 1,
+        index: e.kind === 'drone' ? 0 : e.kind === 'heavy' ? 1 : e.kind === 'ghost' ? 2 : 3,
+        flicker: e.kind === 'ghost' ? 0.7 : undefined,
+      });
+    }
+    // In-flight rocket projectiles
+    for (const p of this.projectiles) {
+      const dx = p.position.x - this.player.position.x;
+      const dy = p.position.y - this.player.position.y;
+      sprites.push({
+        position: p.position,
+        dist: dx * dx + dy * dy,
+        type: 'projectile',
+        index: 0,
       });
     }
     // Items (level interactables with item kinds)
@@ -579,6 +679,7 @@ export class Game {
     this.player.refill('pistol', 18);
     this.player.refill('shotgun', 0);
     this.player.refill('pulse_rifle', 30);
+    this.player.refill('rocket_launcher', 4);
     this.deathAt = 0;
   }
 

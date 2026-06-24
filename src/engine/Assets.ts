@@ -34,16 +34,19 @@ export class AssetLoader {
     return styles.map((s, i) => this.textureFor(0xCA11 * (i + 1), s));
   }
 
-  buildSpriteAtlas(): { enemies: HTMLCanvasElement[]; weapons: HTMLCanvasElement[]; items: HTMLCanvasElement[] } {
+  buildSpriteAtlas(): { enemies: HTMLCanvasElement[]; weapons: HTMLCanvasElement[]; items: HTMLCanvasElement[]; projectiles: HTMLCanvasElement[] } {
     return {
       enemies: [
         this.makeEnemySprite('#ff7090', 'patrol_drone'),
         this.makeEnemySprite('#ff4040', 'heavy_grunt'),
+        this.makeEnemySprite('#4be3ff', 'ghost'),
+        this.makeTurretSprite(),
       ],
       weapons: [
         this.makeWeaponSprite('pistol'),
         this.makeWeaponSprite('shotgun'),
         this.makeWeaponSprite('pulse_rifle'),
+        this.makeWeaponSprite('rocket_launcher'),
       ],
       items: [
         this.makeItemSprite('#4be3ff', 'KEY'),
@@ -52,7 +55,49 @@ export class AssetLoader {
         this.makeItemSprite('#ff3aa1', 'DAT'),
         this.makeItemSprite('#ffe24b', 'CRD'),
       ],
+      projectiles: [
+        this.makeProjectileSprite(),
+      ],
     };
+  }
+
+  /** Stationary gun emplacement — a boxy console silhouette instead of the
+   *  humanoid drone/heavy shape, so it reads as immobile at a glance. */
+  private makeTurretSprite(): HTMLCanvasElement {
+    const cv = document.createElement('canvas');
+    cv.width = 128; cv.height = 128;
+    const g = cv.getContext('2d')!;
+    g.imageSmoothingEnabled = false;
+    g.fillStyle = '#0a0d12';
+    g.fillRect(24, 60, 80, 50);
+    g.fillStyle = '#ffb048';
+    g.fillRect(36, 70, 56, 24);
+    g.fillStyle = '#0a0d12';
+    g.fillRect(56, 30, 16, 40);
+    g.fillStyle = '#ff4040';
+    g.fillRect(58, 24, 12, 12);
+    g.fillStyle = '#0a0d12';
+    g.fillRect(16, 104, 96, 14);
+    return cv;
+  }
+
+  /** In-flight rocket-launcher projectile (world-space billboard). */
+  private makeProjectileSprite(): HTMLCanvasElement {
+    const cv = document.createElement('canvas');
+    cv.width = 64; cv.height = 64;
+    const g = cv.getContext('2d')!;
+    g.imageSmoothingEnabled = false;
+    const glow = g.createRadialGradient(32, 32, 2, 32, 32, 26);
+    glow.addColorStop(0, 'rgba(255,210,120,1)');
+    glow.addColorStop(0.4, 'rgba(255,120,40,0.9)');
+    glow.addColorStop(1, 'rgba(255,60,20,0)');
+    g.fillStyle = glow;
+    g.fillRect(0, 0, 64, 64);
+    g.fillStyle = '#fff6d8';
+    g.beginPath();
+    g.arc(32, 32, 5, 0, Math.PI * 2);
+    g.fill();
+    return cv;
   }
 
   private makeEnemySprite(baseColor: string, _kind: string): HTMLCanvasElement {
@@ -92,6 +137,12 @@ export class AssetLoader {
     if (kind === 'pulse_rifle') {
       g.fillStyle = '#ff3aa1';
       g.fillRect(120, 16, 80, 16);
+    }
+    if (kind === 'rocket_launcher') {
+      g.fillStyle = '#5b6470';
+      g.fillRect(60, 12, 150, 36);
+      g.fillStyle = '#ffb048';
+      g.fillRect(190, 18, 24, 24);
     }
     return cv;
   }

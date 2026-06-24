@@ -1,6 +1,6 @@
 # NEURODOOM — Specification
 
-> **Cyberpunk immersive-sim FPS — Doom's brutality meets System Shock's depth, in the browser.**
+> **Cyberpunk immersive-sim FPS — visceral combat meets deep systemic simulation, in the browser.**
 
 ## 1. Concept
 
@@ -54,6 +54,8 @@ States: `IDLE → PATROL → ALERT → CHASE → ATTACK → RETREAT → DEAD`
 - Vision cones (line-of-sight, light-modulated)
 - Patrol paths hardcoded in MAP.json
 - Drop loot on death (credits, ammo, keycards)
+- Kinds: `drone`, `heavy`, `ghost`, `turret`, and a one-per-level `boss` (higher HP/armor/damage, larger sprite scale). A level's `boss` dying is the run's win condition — see 4.11.
+- Difficulty (`easy`/`normal`/`hard`, picked in Settings) scales only enemy→player damage via `EnemySystem.setDamageMultiplier`.
 
 ### 4.5 Inventory
 - Slot grid (12 hot + 4 weapon)
@@ -88,6 +90,14 @@ States: `IDLE → PATROL → ALERT → CHASE → ATTACK → RETREAT → DEAD`
 - `src/game/levels/registry.ts` lists `MAP.json` imports
 - Levels gated by `flag:` items; saves carry flag set forward
 
+### 4.11 Settings, Accessibility & Crash Logging
+- `engine/Settings.ts`: persisted to `localStorage` (`neurodoom:settings`), separate from save slots — audio volumes (master/sfx/voice/ambient/music), mouse sensitivity, difficulty, reduce-motion flag
+- `engine/Input.ts`: full key rebinding (`RemappableAction` → key, persisted via `neurodoom:keybindings`)
+- Accessibility: reduce-motion dampens headbob; terminal/log audio always paired with a synced on-screen transcript (never audio-only); HUD bars/ammo/items labeled with text, not color alone
+- Save export/import: a save slot can be exported/imported as a JSON file from the Options panel
+- `engine/ErrorLog.ts`: `window.onerror` / `unhandledrejection` captured to `localStorage` (`neurodoom:errorlog`, last 50 entries) for post-crash diagnostics
+- Win condition: a level's `boss` enemy reaching `DEAD` state ends the run with an ending screen (see 4.4)
+
 ## 5. File Layout
 
 ```
@@ -114,6 +124,8 @@ neurodoom/
 │  │  ├─ Persistence.ts    # IndexedDB wrapper (raw, zero-dep)
 │  │  ├─ Assets.ts         # Texture/sound loaders (procedural + cache)
 │  │  ├─ Procedural.ts     # Canvas noise textures + audio synths
+│  │  ├─ Settings.ts       # Options menu state (audio/sensitivity/difficulty), localStorage-persisted
+│  │  ├─ ErrorLog.ts       # window.onerror/unhandledrejection capture, localStorage-persisted
 │  │  └─ LevelLoader.ts    # Builds runtime LevelData from a MapManifest
 │  └─ game/
 │     ├─ index.ts          # Game orchestrator (loop wiring, systems)

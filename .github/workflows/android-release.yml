@@ -1,11 +1,18 @@
 name: Android APK
 
-# Builds the Capacitor Android APK and, when triggered by a version tag,
-# publishes it as a GitHub Release. Manual runs upload the APK as an artifact.
+# Builds the Capacitor Android APK. Triggered by a version tag, or manually
+# via the Actions tab. When a version is supplied (tag push, or the `version`
+# input on a manual run) the APK is published as a GitHub Release; otherwise
+# it is only uploaded as a workflow artifact.
 on:
   push:
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish as a Release (e.g. v0.1.0). Leave blank to only build an artifact.'
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -15,6 +22,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Resolve release tag
+        id: rel
+        run: |
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            echo "tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+          fi
 
       - uses: actions/setup-node@v4
         with:
@@ -52,7 +68,8 @@ jobs:
       - name: Stage APK
         run: |
           mkdir -p out
-          cp android/app/build/outputs/apk/debug/app-debug.apk out/neurodoom-${{ github.ref_type == 'tag' && github.ref_name || github.sha }}.apk
+          NAME="${{ steps.rel.outputs.tag != '' && steps.rel.outputs.tag || github.sha }}"
+          cp android/app/build/outputs/apk/debug/app-debug.apk "out/neurodoom-${NAME}.apk"
           ls -la out
 
       - name: Upload APK artifact
@@ -62,13 +79,14 @@ jobs:
           path: out/*.apk
 
       - name: Publish GitHub Release
-        if: github.ref_type == 'tag'
+        if: steps.rel.outputs.tag != ''
         uses: softprops/action-gh-release@v2
         with:
-          name: NEURODOOM ${{ github.ref_name }}
+          tag_name: ${{ steps.rel.outputs.tag }}
+          name: NEURODOOM ${{ steps.rel.outputs.tag }}
           files: out/*.apk
           body: |
-            NEURODOOM Android build (${{ github.ref_name }}).
+            NEURODOOM Android build (${{ steps.rel.outputs.tag }}).
 
             Sideload-installable **debug** APK. On your device, enable
             "Install unknown apps" for your browser/file manager, then open

@@ -4,11 +4,11 @@ import tsParser from '@typescript-eslint/parser';
 
 export default [
   {
-    ignores: ['dist/**', 'node_modules/**'],
+    ignores: ['dist/**', 'node_modules/**', 'android/**'],
   },
   {
     files: ['**/*.ts'],
-    ignores: ['vitest.config.ts'],
+    ignores: ['vitest.config.ts', 'capacitor.config.ts'],
     languageOptions: {
       parser: tsParser,
       parserOptions: {
@@ -26,7 +26,7 @@ export default [
     },
   },
   {
-    files: ['vitest.config.ts'],
+    files: ['vitest.config.ts', 'capacitor.config.ts'],
     languageOptions: {
       parser: tsParser,
     },

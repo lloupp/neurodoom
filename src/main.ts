@@ -1,5 +1,5 @@
 import './style.css';
-import { installGlobalErrorLogging } from './engine';
+import { installGlobalErrorLogging, TouchControls, isTouchDevice } from './engine';
 import { Game } from './game';
 
 installGlobalErrorLogging();
@@ -225,5 +225,10 @@ const game = new Game({
   panelInventory,
   panelMenu,
 });
+
+// Mobile: mount on-screen touch controls (movement stick, drag-to-look, action buttons).
+if (isTouchDevice()) {
+  new TouchControls(root, game.input, hud);
+}
 
 void game.beginWithMenu();

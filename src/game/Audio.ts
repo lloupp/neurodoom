@@ -6,6 +6,8 @@ export class GameAudio {
   private ambientGain: GainNode | null = null;
   private tensionGain: GainNode | null = null;
   private threat = 0;
+  private seqTimer: number | null = null;
+  private seqStep = 0;
 
   constructor(private readonly bus: AudioBus) {}
 
@@ -98,6 +100,28 @@ export class GameAudio {
     this.tensionGain.gain.value = 0;
     tension.connect(hp).connect(this.tensionGain).connect(this.bus.gains.music ?? this.bus.master!);
     tension.start();
+
+    // Combat pulse: a driving minor-key bass sequence on the music bus that
+    // only sounds while threat is up — silence in stealth, drums-of-war in a
+    // firefight. Each note is a short one-shot; nothing runs while calm.
+    const NOTES = [55.0, 55.0, 82.41, 55.0, 65.41, 55.0, 98.0, 73.42]; // A1-centred minor riff
+    this.seqTimer = window.setInterval(() => {
+      if (this.threat < 0.12) { this.seqStep = 0; return; }
+      const c = this.bus.ctxInstance();
+      if (!c || c.state !== 'running') return;
+      const osc = c.createOscillator();
+      osc.type = 'triangle';
+      osc.frequency.value = NOTES[this.seqStep++ % NOTES.length]!;
+      const g = c.createGain();
+      const t0 = c.currentTime;
+      const peak = 0.008 + 0.05 * this.threat;
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(peak, t0 + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.26);
+      osc.connect(g).connect(this.bus.gains.music ?? this.bus.master!);
+      osc.start(t0);
+      osc.stop(t0 + 0.3);
+    }, 280);
   }
 
   /** Adaptive layer: 0 = calm, 1 = full alert. Smoothly fades the tension bed in. */

@@ -37,7 +37,8 @@ export type EnemyKind = 'drone' | 'heavy' | 'ghost' | 'turret' | 'boss';
  *  long engagement range and zero patrol/chase movement; `boss` is a
  *  one-off climactic encounter — slow but heavily armored, hits hard at
  *  range, and its death is the game's win condition (see Game.update). */
-const MAX_HP: Record<EnemyKind, number> = { drone: 30, heavy: 70, ghost: 18, turret: 90, boss: 220 };
+export const ENEMY_MAX_HP: Record<EnemyKind, number> = { drone: 30, heavy: 70, ghost: 18, turret: 90, boss: 220 };
+const MAX_HP = ENEMY_MAX_HP;
 const BASE_SPEED: Record<EnemyKind, number> = { drone: 1.7, heavy: 1.3, ghost: 2.6, turret: 0, boss: 1.1 };
 const ARMOR: Record<EnemyKind, number> = { drone: 1, heavy: 0.75, ghost: 1.3, turret: 0.6, boss: 0.5 };
 
@@ -51,6 +52,8 @@ export interface EnemySnapshot {
   awareness: number;
   spottedAt: number;
   patrolIndex: number;
+  /** Seconds remaining of the white damage-flash (renderer feedback). */
+  hitFlash: number;
 }
 
 interface InternalEnemy {
@@ -67,6 +70,7 @@ interface InternalEnemy {
   attackCooldown: number;
   retreatUntil: number;
   stateSince: number;
+  hitFlash: number;
 }
 
 export class EnemySystem {
@@ -96,6 +100,7 @@ export class EnemySystem {
       attackCooldown: 0,
       retreatUntil: 0,
       stateSince: 0,
+      hitFlash: 0,
     });
     return id;
   }
@@ -114,6 +119,7 @@ export class EnemySystem {
       awareness: e.awareness,
       spottedAt: e.spottedAt,
       patrolIndex: e.patrolIndex,
+      hitFlash: e.hitFlash,
     }));
   }
 
@@ -126,6 +132,7 @@ export class EnemySystem {
       const r2 = radius * radius;
       if (dx * dx + dy * dy <= r2 && e.state !== 'DEAD') {
         e.hp -= amount * ARMOR[e.kind];
+        e.hitFlash = 0.14;
         e.position.x += Math.cos(knockDir) * 0.06;
         e.position.y += Math.sin(knockDir) * 0.06;
         if (e.hp <= 0) {
@@ -158,7 +165,7 @@ export class EnemySystem {
     return {
       id: e.id, position: { ...e.position }, angle: e.angle,
       kind: e.kind, hp: e.hp, state: e.state, awareness: e.awareness,
-      spottedAt: e.spottedAt, patrolIndex: e.patrolIndex,
+      spottedAt: e.spottedAt, patrolIndex: e.patrolIndex, hitFlash: e.hitFlash,
     };
   }
 
@@ -172,6 +179,7 @@ export class EnemySystem {
     const level = this.level;
 
     for (const e of this.enemies) {
+      e.hitFlash = Math.max(0, e.hitFlash - dt);
       if (e.state === 'DEAD') continue;
       e.attackCooldown = Math.max(0, e.attackCooldown - dt);
       e.retreatUntil = Math.max(0, e.retreatUntil - dt);

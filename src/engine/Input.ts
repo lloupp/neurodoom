@@ -54,6 +54,12 @@ export class Input {
   private readonly pressed = new Set<string>();
   private keyBindings: Record<RemappableAction, string> = loadBindings();
 
+  // Touch (mobile) input, fed by TouchControls. Merged into consume() so it
+  // coexists with keyboard/mouse rather than replacing it.
+  private readonly touch = { moveX: 0, moveY: 0, fire: false, jump: false };
+  private touchInteractEdge = false;
+  private touchPauseEdge = false;
+
   private readonly domTarget: HTMLElement;
   private locked = false;
   private listeners: Array<() => void> = [];
@@ -97,6 +103,16 @@ export class Input {
     try { localStorage.setItem(BINDINGS_KEY, JSON.stringify(this.keyBindings)); } catch { /* best-effort */ }
   }
 
+  // --- Touch API (mobile virtual controls) ---
+  /** Analog stick: x = strafe (-1 left .. 1 right), y = drive (-1 back .. 1 forward). */
+  setTouchMove(x: number, y: number): void { this.touch.moveX = x; this.touch.moveY = y; }
+  setTouchFire(v: boolean): void { this.touch.fire = v; }
+  setTouchJump(v: boolean): void { this.touch.jump = v; }
+  /** Adds a look delta directly (no pointer lock on touch devices). Only yaw (dx) is used. */
+  addLook(dx: number, dy: number): void { this.state.mouseDX += dx; this.state.mouseDY += dy; }
+  touchInteract(): void { this.touchInteractEdge = true; }
+  touchPause(): void { this.touchPauseEdge = true; }
+
   /** Read & clear per-frame edge flags. Continuous flags stay live. */
   consume(): InputState {
     const out: InputState = { ...this.state };
@@ -117,6 +133,16 @@ export class Input {
       const k = `digit${i}-pressed`;
       if (this.pressed.delete(k)) out.use = i;
     }
+    // Merge touch input on top of keyboard/mouse.
+    const t = this.touch;
+    if (t.moveY > 0) out.forward = Math.max(out.forward, t.moveY);
+    else if (t.moveY < 0) out.backward = Math.max(out.backward, -t.moveY);
+    if (t.moveX > 0) out.strafeR = Math.max(out.strafeR, t.moveX);
+    else if (t.moveX < 0) out.strafeL = Math.max(out.strafeL, -t.moveX);
+    out.fire = out.fire || t.fire;
+    out.jump = out.jump || t.jump;
+    if (this.touchInteractEdge) { out.interact = true; this.touchInteractEdge = false; }
+    if (this.touchPauseEdge) { out.pause = true; this.touchPauseEdge = false; }
     return out;
   }
 

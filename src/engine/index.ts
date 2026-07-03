@@ -10,3 +10,4 @@ export * from './Procedural';
 export * from './Assets';
 export * from './Settings';
 export * from './ErrorLog';
+export * from './TouchControls';

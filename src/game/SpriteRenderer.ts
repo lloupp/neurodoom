@@ -26,6 +26,10 @@ export interface SpriteRef {
   flicker?: number;
   /** Size multiplier on top of the standard distance-based projection (e.g. boss). */
   scale?: number;
+  /** Just-damaged white flash (FX feedback). */
+  tint?: boolean;
+  /** Dead entity: rendered darker, squashed, and sunk toward the floor. */
+  dead?: boolean;
 }
 
 /** Camera-relative projection for a single billboard entity. */
@@ -152,11 +156,23 @@ export class SpriteRenderer {
       this.ctx.save();
       this.ctx.globalAlpha = alpha;
       this.ctx.imageSmoothingEnabled = false;
+      let drawY = proj.yCenter - proj.height / 2;
+      let drawH = proj.height;
+      if (s.dead) {
+        // Corpse: squashed toward the floor, dimmed — reads as down, not idle.
+        drawH = proj.height * 0.35;
+        drawY = proj.yCenter + proj.height / 2 - drawH;
+        this.ctx.globalAlpha = alpha * 0.55;
+        this.ctx.filter = 'brightness(0.45) saturate(0.5)';
+      } else if (s.tint) {
+        // Hit flash: momentary overbright pop so landed shots read instantly.
+        this.ctx.filter = 'brightness(2.4) saturate(0.4)';
+      }
       this.ctx.drawImage(
         img, 0, 0, img.width, img.height,
         proj.xCenter - proj.width / 2,
-        proj.yCenter - proj.height / 2,
-        proj.width, proj.height,
+        drawY,
+        proj.width, drawH,
       );
       if (s.type === 'item') {
         this.ctx.font = '10px ui-monospace, monospace';

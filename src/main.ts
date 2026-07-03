@@ -185,6 +185,7 @@ win.hidden = true;
 win.innerHTML = `
   <h2>SHIVA SEVERED</h2>
   <p>The warden falls silent. You jack out, for now.</p>
+  <p class="win-stats" data-win-stats></p>
   <div style="display:flex;justify-content:center;gap:8px;margin-top:18px">
     <button data-act="menu">// MAIN MENU</button>
   </div>

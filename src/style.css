@@ -305,6 +305,18 @@ canvas {
   text-shadow: 0 0 12px var(--neon-cyan), 0 0 28px rgba(75, 227, 255, 0.4);
   margin: 0;
 }
+/* Neon glitch: chromatic split flickers on the title, breathing glow between hits. */
+@media (prefers-reduced-motion: no-preference) {
+  #boot h1 { animation: boot-glitch 3.2s infinite steps(1, end); }
+  @keyframes boot-glitch {
+    0%, 88%, 100% { text-shadow: 0 0 12px var(--neon-cyan), 0 0 28px rgba(75, 227, 255, 0.4); transform: none; }
+    89% { text-shadow: -3px 0 0 #ff2d55, 3px 0 0 var(--neon-cyan), 0 0 28px rgba(75, 227, 255, 0.6); transform: translateX(2px) skewX(-2deg); }
+    91% { text-shadow: 3px 0 0 #ff2d55, -3px 0 0 var(--neon-cyan), 0 0 22px rgba(255, 45, 85, 0.5); transform: translateX(-2px); }
+    93% { text-shadow: 0 0 16px var(--neon-cyan), 0 0 34px rgba(75, 227, 255, 0.7); transform: none; }
+    46% { text-shadow: 2px 0 0 #ff2d55, -2px 0 0 var(--neon-cyan), 0 0 28px rgba(75, 227, 255, 0.5); transform: translateX(1px); }
+    47.5% { text-shadow: 0 0 12px var(--neon-cyan), 0 0 28px rgba(75, 227, 255, 0.4); transform: none; }
+  }
+}
 #boot p { color: var(--ink-dim); margin: 0; }
 #boot button {
   background: none; border: 1px solid var(--neon-cyan);
@@ -315,6 +327,15 @@ canvas {
   text-transform: uppercase;
 }
 #boot button:hover { background: var(--neon-cyan); color: var(--bg-0); box-shadow: 0 0 24px var(--neon-cyan); }
+
+/* Win-screen run stats */
+#win .win-stats {
+  color: var(--neon-cyan);
+  font-family: var(--font-display);
+  letter-spacing: 0.25em;
+  margin: 14px 0 0;
+  text-shadow: 0 0 10px rgba(75, 227, 255, 0.6);
+}
 
 /* === Death screen === */
 #dead {

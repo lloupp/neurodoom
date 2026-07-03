@@ -15,7 +15,8 @@ import type { RemappableAction } from '../engine/Input';
 import { MapRenderer } from './MapRenderer';
 import { SpriteRenderer, type SpriteRef } from './SpriteRenderer';
 import { Player, WEAPONS, type WeaponId, type WeaponDef } from './Player';
-import { EnemySystem, type LootDrop, type EnemyKind } from './Enemy';
+import { EnemySystem, ENEMY_MAX_HP, type LootDrop, type EnemyKind } from './Enemy';
+import { FXSystem } from './FX';
 import { surfaceAt, collidesAt } from './Level';
 import { TerminalSystem, type LogTag } from './Terminal';
 import type { MapTrigger } from './MapSchema';
@@ -78,6 +79,14 @@ export class Game {
   weaponOrder: WeaponId[] = ['pistol', 'shotgun', 'pulse_rifle', 'rocket_launcher'];
   private projectiles: Projectile[] = [];
   settings: GameSettings = loadSettings();
+  readonly fx: FXSystem;
+
+  // Game-feel state (FX layer)
+  private lastHp = 100;
+  private lastZoneName: string | null = null;
+  private bossIntroShown = false;
+  private muzzle = 0;
+  private runStats = { kills: 0, shots: 0, hits: 0 };
 
   // reactive cells for HUD refresh
   private readonly ammoCell = cell<{ name: string; clip: number; reserve: number }>({ name: '—', clip: 0, reserve: 0 });
@@ -94,6 +103,7 @@ export class Game {
     this.renderer = new MapRenderer(refs.worldCanvas, this.assets);
     this.spriteRenderer = new SpriteRenderer(refs.spriteCanvas, this.assets);
     this.gameAudio = new GameAudio(this.audio);
+    this.fx = new FXSystem(refs.root, [refs.worldCanvas, refs.spriteCanvas, refs.weaponCanvas]);
 
     const hudRefs: HUDRefs = {
       hud: refs.hud,
@@ -134,6 +144,7 @@ export class Game {
     this.audio.setCategoryGain('music', this.settings.musicVolume);
     this.player.setSensitivity(this.settings.sensitivity);
     this.enemySystem?.setDamageMultiplier(DIFFICULTY_DAMAGE_TAKEN[this.settings.difficulty]);
+    this.fx.setReduceMotion(this.settings.reduceMotion);
   }
 
   private wireMenuCallbacks(): void {
@@ -158,6 +169,7 @@ export class Game {
     };
     this.hud.onSetReduceMotion = (v) => {
       this.settings.reduceMotion = v;
+      this.applySettings();
       saveSettings(this.settings);
     };
     this.hud.onRebindKey = (action: RemappableAction, key: string) => {
@@ -214,6 +226,12 @@ export class Game {
   begin(): void {
     this.hasWon = false;
     this.refs.win.hidden = true;
+    this.lastHp = this.player.stats.hp;
+    this.lastZoneName = null;
+    this.bossIntroShown = false;
+    this.muzzle = 0;
+    this.runStats = { kills: 0, shots: 0, hits: 0 };
+    this.fx.bossBar(null);
     this.loadLevelById('sublevel_3');
     this.shell.start({
       update: (dt, t) => this.update(dt, t),
@@ -330,9 +348,36 @@ export class Game {
     const threat = this.enemySystem.snapshots().reduce((max, e) => Math.max(max, e.state === 'DEAD' ? 0 : e.awareness), 0);
     this.gameAudio.setThreat(threat);
 
+    // Player-damage feedback: enemies deal damage inside enemySystem.update(),
+    // so a drop in hp between ticks is the single reliable signal for it.
+    const hpNow = this.player.stats.hp;
+    if (hpNow < this.lastHp - 0.01) {
+      const dmg = this.lastHp - hpNow;
+      this.fx.damagePulse(Math.min(1, dmg / 25));
+      this.fx.shake(Math.min(0.7, 0.2 + dmg / 45));
+      if (hpNow <= 0) this.fx.flash('rgba(255,24,48,0.8)', 0.7); // death blow
+    }
+    this.lastHp = hpNow;
+    this.fx.setLowHp(hpNow / this.player.stats.maxHp);
+
+    // Boss encounter presentation: intro card the first time it locks on,
+    // then a live health bar for the rest of the fight.
+    const boss = this.enemySystem.snapshots().find((e) => e.kind === 'boss');
+    if (boss && boss.state !== 'DEAD') {
+      if (!this.bossIntroShown && boss.awareness > 0.35) {
+        this.bossIntroShown = true;
+        this.fx.banner('THE WARDEN', "SHIVA'S AVATAR — SEVER THE LINK", true);
+        this.gameAudio.playAlarm({ x: boss.position.x, y: boss.position.y, z: 0 });
+      }
+      if (this.bossIntroShown) this.fx.bossBar(Math.max(0, boss.hp) / ENEMY_MAX_HP.boss);
+    }
+
     // Win condition: the boss (one per level, the run's climactic encounter) is dead.
-    if (!this.hasWon && this.enemySystem.snapshots().some((e) => e.kind === 'boss' && e.state === 'DEAD')) {
+    if (!this.hasWon && boss?.state === 'DEAD') {
       this.hasWon = true;
+      this.fx.bossBar(null);
+      this.fx.flash('#e8fbff', 0.85);
+      this.fx.shake(1);
       this.input.exitPointerLock();
     }
 
@@ -438,6 +483,11 @@ export class Game {
       const zone = this.levelState.manifest?.zones?.find((z) => tx >= z.x && tx < z.x + z.w && ty >= z.y && ty < z.y + z.h);
       if (zone) {
         this.roomCell.set(zone.name);
+        // Cinematic title card on first entry into each named zone.
+        if (zone.name !== this.lastZoneName) {
+          this.lastZoneName = zone.name;
+          if (!this.hasWon) this.fx.banner(zone.name, this.levelState.manifest?.name ?? '');
+        }
       } else {
         const room = this.levelState.data.rooms.find((r) => tx >= r.x && tx < r.x + r.w && ty >= r.y && ty < r.y + r.h);
         if (room) {
@@ -576,6 +626,11 @@ export class Game {
     const spread = def.spread;
     const angle = this.player.angle + (Math.random() - 0.5) * spread;
 
+    // Game-feel: recoil-scaled shake + a one-frame muzzle light on the walls.
+    this.runStats.shots++;
+    this.fx.shake(def.recoilPitch * 2.4);
+    this.muzzle = 1;
+
     // Projectile weapons (rocket launcher) spawn a travelling entity resolved
     // frame-by-frame in updateProjectiles() instead of an instant hitscan.
     if (def.projectileSpeed) {
@@ -609,6 +664,10 @@ export class Game {
       }
       if (hits.length) {
         this.gameAudio.playHit({ x: r.pos.x, y: r.pos.y, z: 0 });
+        this.runStats.hits++;
+        const kills = hits.filter((h) => h.state === 'DEAD').length;
+        this.runStats.kills += kills;
+        this.fx.hitmarker(kills > 0);
       }
       for (const drop of loot) this.spawnLoot(drop);
     }
@@ -657,11 +716,21 @@ export class Game {
    *  Doom-style rocket-jump risk. */
   private explodeProjectile(pos: { x: number; y: number }, def: WeaponDef): void {
     this.gameAudio.playExplosion({ x: pos.x, y: pos.y, z: 0 });
+    // Blast presentation scales with proximity — up close it rocks the camera.
+    const distToBlast = Math.hypot(pos.x - this.player.position.x, pos.y - this.player.position.y);
+    this.fx.shake(Math.min(1, 0.9 - distToBlast * 0.07));
+    this.fx.flash('rgba(255,122,69,0.9)', Math.max(0.1, 0.45 - distToBlast * 0.04));
     const radius = def.splashRadius ?? 2;
     const tileX = Math.floor(pos.x);
     const tileY = Math.floor(pos.y);
     const { hits, loot } = this.enemySystem.damageAtTile(tileX, tileY, radius, def.damage, 0);
-    if (hits.length) this.gameAudio.playHit({ x: pos.x, y: pos.y, z: 0 });
+    if (hits.length) {
+      this.gameAudio.playHit({ x: pos.x, y: pos.y, z: 0 });
+      this.runStats.hits++;
+      const kills = hits.filter((h) => h.state === 'DEAD').length;
+      this.runStats.kills += kills;
+      this.fx.hitmarker(kills > 0);
+    }
     for (const drop of loot) this.spawnLoot(drop);
 
     const distToPlayer = Math.hypot(pos.x - this.player.position.x, pos.y - this.player.position.y);
@@ -692,13 +761,24 @@ export class Game {
     const motionScale = this.settings.reduceMotion ? 0.3 : 1;
     const bobAmp = this.player.snapshot().walking * motionScale;
     cam.pitch += Math.sin(this.player.bobPhase) * 0.04 * bobAmp;
+    // Muzzle light: firing brightens nearby wall columns for a few frames,
+    // strongest at screen center (columnLight resets after each render).
+    if (this.muzzle > 0.02) {
+      const cols = this.renderer.columnLight.length;
+      for (let x = 0; x < cols; x++) {
+        const t = 1 - Math.abs(x - cols / 2) / (cols / 2);
+        this.renderer.columnLight[x] = 1 + this.muzzle * 0.9 * t * t;
+      }
+      this.muzzle *= 0.75;
+    }
     this.renderer.render(this.levelState.data, cam, Math.sin(this.player.bobPhase) * bobAmp * 0.05);
     // Sprites
     const sprites = this.buildSprites();
     const atlas = this.assets.buildSpriteAtlas();
     this.spriteRenderer.render(cam, this.renderer.zBuffer, sprites, atlas);
-    // HUD
+    // HUD + FX layer (shake transform, flash/vignette decay)
     this.hud.render(1 / 60);
+    this.fx.update(1 / 60);
     void alpha; void t;
 
     if (this.player.stats.hp <= 0 && !this.refs.dead.hidden === false) {
@@ -709,10 +789,13 @@ export class Game {
     }
 
     if (this.hasWon && this.refs.win.hidden) {
+      const secs = Math.floor(this.playTimeMs / 1000);
+      const time = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
+      const acc = this.runStats.shots > 0 ? Math.round((this.runStats.hits / this.runStats.shots) * 100) : 0;
       this.hud.showWinScreen(() => {
         this.shell.stop();
         void this.beginWithMenu();
-      });
+      }, `TIME ${time} • KILLS ${this.runStats.kills} • ACCURACY ${acc}%`);
     }
   }
 
@@ -727,8 +810,10 @@ export class Game {
         dist: dx * dx + dy * dy,
         type: 'enemy',
         index: e.kind === 'drone' ? 0 : e.kind === 'heavy' ? 1 : e.kind === 'ghost' ? 2 : e.kind === 'turret' ? 3 : 4,
-        flicker: e.kind === 'ghost' ? 0.7 : undefined,
+        flicker: e.kind === 'ghost' && e.state !== 'DEAD' ? 0.7 : undefined,
         scale: e.kind === 'boss' ? 1.6 : undefined,
+        tint: e.hitFlash > 0 && e.state !== 'DEAD' ? true : undefined,
+        dead: e.state === 'DEAD' ? true : undefined,
       });
     }
     // In-flight rocket projectiles

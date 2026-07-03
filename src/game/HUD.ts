@@ -247,8 +247,10 @@ export class HUD {
     };
   }
 
-  showWinScreen(onMenu: () => void): void {
+  showWinScreen(onMenu: () => void, statsText?: string): void {
     this.refs.win.hidden = false;
+    const statsEl = this.refs.win.querySelector<HTMLElement>('[data-win-stats]');
+    if (statsEl) statsEl.textContent = statsText ?? '';
     const menuBtn = this.refs.win.querySelector<HTMLButtonElement>('[data-act="menu"]')!;
     menuBtn.onclick = () => {
       this.refs.win.hidden = true;

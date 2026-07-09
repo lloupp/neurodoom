@@ -6,7 +6,10 @@ import type { EntityId } from './types';
 export type ComponentKey = string & { readonly __brand: 'ComponentKey' };
 export const defineComponent = (name: string): ComponentKey => name as ComponentKey;
 
-export type ComponentMap = Record<ComponentKey, unknown>;
+// ComponentMap: any object mapping string keys to component types.
+// Using `object` as the constraint so plain interfaces satisfy it
+// without requiring an explicit index signature.
+export type ComponentMap = object;
 
 export interface Entity<M extends ComponentMap> {
   readonly id: EntityId;

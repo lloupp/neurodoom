@@ -142,6 +142,8 @@ export function startHack(puzzle: HackPuzzle): HackState {
 
 export function submitToken(state: HackState, idx: number, token: string): { tracesLeft: number; correct: boolean } {
   if (state.status !== 'running') return { tracesLeft: state.tracesLeft, correct: false };
+  // Only puzzle holes are editable; visible program tokens are immutable.
+  if (!state.puzzle.missingIndices.includes(idx)) return { tracesLeft: state.tracesLeft, correct: false };
   state.userInput.set(idx, token);
   if (token.length === 0) return { tracesLeft: state.tracesLeft, correct: false };
   const isCorrect = token.toUpperCase() === state.puzzle.solution[idx];

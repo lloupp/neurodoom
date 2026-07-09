@@ -141,16 +141,18 @@ export class Player {
   }
 
   damage(dmg: number): boolean {  // returns fatal
+    if (dmg <= 0) return this.stats.hp <= 0;
     this.stats.hp = Math.max(0, this.stats.hp - dmg);
     return this.stats.hp <= 0;
   }
 
   heal(amount: number): void {
+    if (amount <= 0) return;
     this.stats.hp = Math.min(this.stats.maxHp, this.stats.hp + amount);
   }
 
   refill(weapon: WeaponId, count: number): void {
-    this.ammo[weapon] = Math.min(WEAPONS[weapon].ammoCapacity * 2, count);
+    this.ammo[weapon] = clamp(count, 0, WEAPONS[weapon].ammoCapacity * 2);
   }
 
   camera(): CameraState {

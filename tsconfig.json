@@ -28,5 +28,5 @@
       "@assets/*": ["src/assets/*"]
     }
   },
-  "include": ["src/**/*", "vite.config.ts", "tests/**/*"]
+  "include": ["src/**/*", "tests/**/*"]
 }

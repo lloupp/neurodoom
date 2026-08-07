@@ -2,7 +2,6 @@ import type { LevelData } from './Level';
 import { textureStyleFor } from '../engine/LevelLoader';
 import type { AssetLoader } from '../engine/Assets';
 import type { Vec2 } from '../engine/types';
-import { deg2rad, TAU } from '../engine/types';
 
 export interface CameraState {
   /** player world position */
@@ -113,20 +112,32 @@ export class MapRenderer {
 
       let hit = false;
       let side = 0;       // 0 = x side, 1 = y side
-      let maxSteps = 64;
-      while (!hit && maxSteps-- > 0) {
-        if (sideDistX < sideDistY) {
-          sideDistX += deltaDistX;
-          mapX += stepX;
-          side = 0;
-        } else {
-          sideDistY += deltaDistY;
-          mapY += stepY;
-          side = 1;
-        }
-        const ch = tiles[mapY]?.[mapX];
-        if (ch && ch !== '.' && ch !== 'D') {
-          hit = true;
+      // Max steps based on map diagonal + margin to ensure we hit walls even on large maps
+      const mapW = tiles[0]?.length ?? 0;
+      const mapH = tiles.length;
+      let maxSteps = Math.ceil(Math.hypot(mapW, mapH)) + 4;
+      // Safety: if camera starts outside map bounds, treat as void immediately
+      if (mapX < 0 || mapX >= mapW || mapY < 0 || mapY >= mapH) {
+        hit = false;
+      } else {
+        while (!hit && maxSteps-- > 0) {
+          if (sideDistX < sideDistY) {
+            sideDistX += deltaDistX;
+            mapX += stepX;
+            side = 0;
+          } else {
+            sideDistY += deltaDistY;
+            mapY += stepY;
+            side = 1;
+          }
+          // Early exit if ray leaves the map bounds
+          if (mapX < 0 || mapX >= mapW || mapY < 0 || mapY >= mapH) {
+            break;
+          }
+          const ch = tiles[mapY]?.[mapX];
+          if (ch && ch !== '.' && ch !== 'D') {
+            hit = true;
+          }
         }
       }
 
@@ -204,6 +215,8 @@ export class MapRenderer {
   hitscan(level: LevelData, from: Vec2, angleRadians: number, maxRange = 24): { hit: boolean; pos: Vec2; distance: number; ch: string } {
     const tiles = level.manifest.tiles;
     const cell = level.manifest.cellSize;
+    const mapW = tiles[0]?.length ?? 0;
+    const mapH = tiles.length;
     const dx = Math.cos(angleRadians);
     const dy = Math.sin(angleRadians);
 
@@ -215,15 +228,13 @@ export class MapRenderer {
       y += dy * step;
       const tx = Math.floor(x / cell);
       const ty = Math.floor(y / cell);
+      // Early exit if ray leaves map bounds
+      if (tx < 0 || tx >= mapW || ty < 0 || ty >= mapH) break;
       const ch = tiles[ty]?.[tx];
       if (ch && ch !== '.' && ch !== 'D') {
         return { hit: true, pos: { x, y }, distance: Math.hypot(x - from.x, y - from.y), ch };
       }
     }
     return { hit: false, pos: { x, y }, distance: maxRange, ch: '' };
-  }
-  // silence unused imports
-  protected _unused(): void {
-    void deg2rad; void TAU;
   }
 }

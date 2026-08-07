@@ -133,4 +133,58 @@ describe('EventBus', () => {
     // 'a' fires and unsubscribes; 'b' still fires (Set iteration is safe)
     expect(order).toEqual(['a', 'b']);
   });
+
+  describe('listenerCount', () => {
+    it('returns 0 for event with no listeners', () => {
+      const bus = new EventBus<TestEvents>();
+      expect(bus.listenerCount('tick')).toBe(0);
+    });
+
+    it('returns correct count when listeners are added', () => {
+      const bus = new EventBus<TestEvents>();
+      expect(bus.listenerCount('tick')).toBe(0);
+      bus.on('tick', () => {});
+      expect(bus.listenerCount('tick')).toBe(1);
+      bus.on('tick', () => {});
+      expect(bus.listenerCount('tick')).toBe(2);
+    });
+
+    it('returns correct count after listener is removed via off()', () => {
+      const bus = new EventBus<TestEvents>();
+      const fn1 = () => {};
+      const fn2 = () => {};
+      bus.on('tick', fn1);
+      bus.on('tick', fn2);
+      expect(bus.listenerCount('tick')).toBe(2);
+      bus.off('tick', fn1);
+      expect(bus.listenerCount('tick')).toBe(1);
+    });
+
+    it('returns correct count after listener is removed via unsubscribe', () => {
+      const bus = new EventBus<TestEvents>();
+      const unsub = bus.on('tick', () => {});
+      expect(bus.listenerCount('tick')).toBe(1);
+      unsub();
+      expect(bus.listenerCount('tick')).toBe(0);
+    });
+
+    it('returns correct count after clear(event)', () => {
+      const bus = new EventBus<TestEvents>();
+      bus.on('tick', () => {});
+      bus.on('playerDied', () => {});
+      expect(bus.listenerCount('tick')).toBe(1);
+      bus.clear('tick');
+      expect(bus.listenerCount('tick')).toBe(0);
+      expect(bus.listenerCount('playerDied')).toBe(1);
+    });
+
+    it('returns correct count after clear() with no args', () => {
+      const bus = new EventBus<TestEvents>();
+      bus.on('tick', () => {});
+      bus.on('playerDied', () => {});
+      bus.clear();
+      expect(bus.listenerCount('tick')).toBe(0);
+      expect(bus.listenerCount('playerDied')).toBe(0);
+    });
+  });
 });

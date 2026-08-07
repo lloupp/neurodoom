@@ -8,7 +8,7 @@ export default [
   },
   {
     files: ['**/*.ts'],
-    ignores: ['vitest.config.ts', 'capacitor.config.ts'],
+    ignores: ['vitest.config.ts', 'capacitor.config.ts', 'vite.config.ts', 'eslint.config.js'],
     languageOptions: {
       parser: tsParser,
       parserOptions: {
@@ -26,7 +26,7 @@ export default [
     },
   },
   {
-    files: ['vitest.config.ts', 'capacitor.config.ts'],
+    files: ['vitest.config.ts', 'capacitor.config.ts', 'vite.config.ts'],
     languageOptions: {
       parser: tsParser,
     },

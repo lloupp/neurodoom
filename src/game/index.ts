@@ -22,7 +22,7 @@ import { TerminalSystem, type LogTag } from './Terminal';
 import type { MapTrigger } from './MapSchema';
 import { HUD, type HUDRefs } from './HUD';
 import { GameAudio } from './Audio';
-import { generatePuzzle, startHack, tickHack } from './Hacking';
+import { generatePuzzle, startHack, tickHack, submitToken } from './Hacking';
 import { writeSlot, readSlot, SAVE_SLOT } from '../engine/Persistence';
 import { listLevels, findLevel } from './levels/registry';
 
@@ -72,8 +72,11 @@ export class Game {
   hackingTargetId: string | null = null;
   isHacking = false;
   private firedTriggers = new Set<string>();
+  private lastAutosaveMs = 0;
+  /** Set by a trigger to defer a level change to the end of the current tick,
+   *  so the rest of update() doesn't run against a half-swapped level. */
+  private pendingLevelId: string | null = null;
   isPaused = false;
-  deathAt = 0;
   hasWon = false;
   weaponIndex = 0;
   weaponOrder: WeaponId[] = ['pistol', 'shotgun', 'pulse_rifle', 'rocket_launcher'];
@@ -86,6 +89,7 @@ export class Game {
   private lastZoneName: string | null = null;
   private bossIntroShown = false;
   private muzzle = 0;
+  private lastRenderTime = 0;
   private runStats = { kills: 0, shots: 0, hits: 0 };
 
   // reactive cells for HUD refresh
@@ -120,6 +124,9 @@ export class Game {
     this.hud = new HUD(hudRefs);
     this.hud.onSelectWeapon = (id) => this.player.setWeapon(id);
     this.hud.onReorderInventory = (from, to) => this.player.reorderInventory(from, to);
+    this.hud.onHackSubmit = (idx, token) => {
+      if (this.hackState) submitToken(this.hackState, idx, token);
+    };
     this.hud.populateMenu(this.settings, this.input.getBindings());
     this.applySettings();
     this.wireMenuCallbacks();
@@ -129,8 +136,15 @@ export class Game {
       this.spriteRenderer.resize();
     });
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'hidden') void this.audio.suspend();
-      else void this.audio.resume();
+      if (document.visibilityState === 'hidden') {
+        void this.audio.suspend();
+      } else if (!this.isPaused) {
+        // Only resume when the game is actually running. If the tab was hidden
+        // while paused (Esc menu), staying suspended is correct — the Resume
+        // button owns un-suspending. Auto-resuming here would play audio behind
+        // the pause overlay.
+        void this.audio.resume();
+      }
     });
   }
 
@@ -181,6 +195,7 @@ export class Game {
       this.isPaused = false;
       this.hud.setPanel(null);
       this.input.requestPointerLock();
+      void this.audio.resume();
     };
     this.hud.onMainMenu = () => {
       // Stay paused — the boot screen sits on top while the shell loop is
@@ -188,6 +203,8 @@ export class Game {
       this.shell.stop();
       this.hud.setPanel(null);
       this.input.exitPointerLock();
+      // Suspend audio so it doesn't play behind the main menu
+      void this.audio.suspend();
       void this.beginWithMenu();
     };
     this.hud.onExportSave = () => this.exportSave();
@@ -239,6 +256,32 @@ export class Game {
     });
   }
 
+  /** Carries a live run into a new level: swaps the map, keeps flags/inventory,
+   *  and resets the per-level FX presentation state so the next zone/boss reads
+   *  as fresh. Flags persist (SPEC 4.10 — saves carry the flag set forward). */
+  private transitionToLevel(id: string): void {
+    if (!this.loadLevelById(id)) return;
+    this.lastZoneName = null;
+    this.bossIntroShown = false;
+    this.fx.bossBar(null);
+    this.fx.flash('#e8fbff', 0.5);
+    this.fx.banner(this.levelState.manifest?.name ?? 'NEW SECTOR', 'JACKING IN', true);
+  }
+
+  /** True when the current level has no onward transition to another registered
+   *  level — i.e. its boss is the run's final encounter. Data-driven off the
+   *  manifest triggers so adding/reordering levels needs no code change: a level
+   *  with a `set_flag { next }` exit is a mid-run level; one without is the end. */
+  private isFinalLevel(): boolean {
+    const triggers = this.levelState.manifest?.triggers ?? [];
+    for (const trig of triggers) {
+      if (trig.type !== 'set_flag') continue;
+      const next = (trig.data as Record<string, unknown> | undefined)?.next;
+      if (typeof next === 'string' && findLevel(next)) return false;
+    }
+    return true;
+  }
+
   loadLevelById(id: string): boolean {
     const rec = findLevel(id);
     if (!rec) return false;
@@ -268,7 +311,13 @@ export class Game {
     // tile char (not the interactable's `locked` flag) governs collision,
     // so they must be carved out of the grid here.
     for (const inter of rec.manifest.interactables) {
-      if (inter.kind === 'door' && !inter.locked) this.terminalSystem.unlockDoor(inter.id);
+      if (inter.kind !== 'door') continue;
+      // Open doors that start unlocked, plus any whose gating flag the run
+      // already carries (save/reload mid-level, or a flag earned on a prior
+      // level — SPEC 4.10: saves carry the flag set forward).
+      if (!inter.locked || (inter.unlockFlag && this.flags.has(inter.unlockFlag))) {
+        this.terminalSystem.unlockDoor(inter.id);
+      }
     }
     this.firedTriggers.clear();
     void this.save();
@@ -282,12 +331,16 @@ export class Game {
     if (rawInput.pause) {
       this.isPaused = !this.isPaused;
       this.hud.setPanel(this.isPaused ? 'menu' : null);
-      if (this.isPaused) this.input.exitPointerLock();
-      else this.input.requestPointerLock();
+      if (this.isPaused) {
+        this.input.exitPointerLock();
+        void this.audio.suspend();
+      } else {
+        this.input.requestPointerLock();
+        void this.audio.resume();
+      }
     }
     if (this.isPaused) return;
     if (this.player.stats.hp <= 0) {
-      this.deathAt += dt;
       // Release the cursor so the death screen's buttons are actually clickable —
       // pointer lock otherwise keeps targeting the (now hidden-behind-overlay) canvas.
       this.input.exitPointerLock();
@@ -299,13 +352,22 @@ export class Game {
       this.hud.setPanel(this.hud.getPanel() === 'inventory' ? null : 'inventory');
     }
     if (this.isHacking && this.hackState) {
+      // Number keys 1..6 patch the selected slot with that token from the bank
+      // (SPEC 4.6); clicking a token in the HUD does the same. Consumed here so
+      // the digit doesn't also quick-swap the weapon below.
+      if (rawInput.use >= 1 && this.hackState.status === 'running') {
+        this.hud.submitHackTokenByIndex(rawInput.use);
+      }
       tickHack(this.hackState, dt);
-      // Number keys select token index from a fixed bank
-      // For UX: support a tiny preview in the HUD
       if (this.hackState.status !== 'running') {
         if (this.hackState.status === 'won') {
-          this.terminalSystem.unlockDoor('door_secure_lab');
-          this.flags.add('flag_lab_terminal');
+          // Open whatever this specific terminal gates — driven by the
+          // interactable's own `unlockFlag`, not a hardcoded Level 1 door, so
+          // hack puzzles work on every level (SPEC 4.10: flag-gated doors).
+          const hacked = this.hackingTargetId
+            ? this.levelState.manifest?.interactables.find((i) => i.id === this.hackingTargetId)
+            : undefined;
+          this.setFlag(hacked?.unlockFlag ?? 'flag_lab_terminal');
           if (this.hackingTargetId) this.applyLogTags(this.terminalSystem.open(this.hackingTargetId));
         } else {
           // Failure: trace alarm + a ghost spawns near the player's position.
@@ -320,11 +382,14 @@ export class Game {
       }
     }
 
-    // Quick weapon swap via 1/2/3
-    if (rawInput.use === 1) this.player.setWeapon('pistol');
-    if (rawInput.use === 2) this.player.setWeapon('shotgun');
-    if (rawInput.use === 3) this.player.setWeapon('pulse_rifle');
-    if (rawInput.use === 4) this.player.setWeapon('rocket_launcher');
+    // Quick weapon swap via 1/2/3 — suppressed while hacking, where the same
+    // digits patch puzzle slots instead of switching weapons.
+    if (!this.isHacking) {
+      if (rawInput.use === 1) this.player.setWeapon('pistol');
+      if (rawInput.use === 2) this.player.setWeapon('shotgun');
+      if (rawInput.use === 3) this.player.setWeapon('pulse_rifle');
+      if (rawInput.use === 4) this.player.setWeapon('rocket_launcher');
+    }
 
     // Move/shoot
     const moveResult = this.player.update(this.levelState.data!, dt, rawInput, {
@@ -370,10 +435,19 @@ export class Game {
         this.gameAudio.playAlarm({ x: boss.position.x, y: boss.position.y, z: 0 });
       }
       if (this.bossIntroShown) this.fx.bossBar(Math.max(0, boss.hp) / ENEMY_MAX_HP.boss);
+    } else if (boss?.state === 'DEAD' && this.bossIntroShown) {
+      // Boss down — retire the health bar whether or not this ends the run.
+      // On a non-final level the run continues via the exit trigger, so the
+      // win block below won't fire and nothing else would clear the bar.
+      this.bossIntroShown = false;
+      this.fx.bossBar(null);
     }
 
-    // Win condition: the boss (one per level, the run's climactic encounter) is dead.
-    if (!this.hasWon && boss?.state === 'DEAD') {
+    // Win condition: the run's climactic encounter — the FINAL level's boss —
+    // is dead. On earlier levels the boss can be killed too, but the run then
+    // continues to the next sector via the exit trigger (SPEC 4.11: the *run's*
+    // win is the last level's boss, not any per-level boss).
+    if (!this.hasWon && boss?.state === 'DEAD' && this.isFinalLevel()) {
       this.hasWon = true;
       this.fx.bossBar(null);
       this.fx.flash('#e8fbff', 0.85);
@@ -394,8 +468,22 @@ export class Game {
       }
     }
 
-    // Auto-save every ~30s
-    if (Math.round(this.playTimeMs / 1000) % 30 === 0 && this.playTimeMs > 1000) {
+    // A trigger this tick may have queued a level transition. Perform it now,
+    // after the loop, then skip the rest of the tick so downstream logic runs
+    // against the fully-swapped level next frame.
+    if (this.pendingLevelId) {
+      const next = this.pendingLevelId;
+      this.pendingLevelId = null;
+      this.transitionToLevel(next);
+      return;
+    }
+
+    // Auto-save every ~30s. Guarded by an elapsed-time delta rather than a
+    // `round(seconds) % 30 === 0` test — the latter is true for every frame of
+    // the ~1s window the rounded value sits on a multiple of 30, firing ~60
+    // IndexedDB writes per interval instead of one.
+    if (this.playTimeMs - this.lastAutosaveMs >= 30_000) {
+      this.lastAutosaveMs = this.playTimeMs;
       void this.save();
     }
 
@@ -436,7 +524,7 @@ export class Game {
         if (inter?.kind === 'terminal' || inter?.kind === 'audio_log') {
           if (inter.locked) {
             // start hack minigame
-            const puzzle = generatePuzzle(Date.now() & 0xFFFFFFFF, 'normal');
+            const puzzle = generatePuzzle(Date.now() & 0xFFFFFFFF, this.settings.difficulty);
             this.hackState = startHack(puzzle);
             this.hackingTargetId = target.id;
             this.isHacking = true;
@@ -560,13 +648,30 @@ export class Game {
     void inter.x; void inter.y;
   }
 
+  /** Sets a persistent story flag and opens any locked door gated behind it.
+   *  Central choke point so flags raised from triggers, hacks, and logs all
+   *  unlock their doors the same way (SPEC 4.10: doors gated by `flag:`),
+   *  instead of relying on Level 1's one hardcoded secure-lab door — that
+   *  omission left Level 2's flag-gated doors (and its boss) permanently
+   *  sealed, making the level unwinnable. */
+  private setFlag(flag: string): void {
+    this.flags.add(flag);
+    const m = this.levelState.manifest;
+    if (!m) return;
+    for (const inter of m.interactables) {
+      if (inter.kind === 'door' && inter.locked && inter.unlockFlag === flag) {
+        this.terminalSystem.unlockDoor(inter.id);
+      }
+    }
+  }
+
   /** Applies unlock/lock/spawn/flag tags parsed from a just-opened terminal log. */
   private applyLogTags(tags: LogTag[]): void {
     for (const tag of tags) {
       switch (tag.type) {
         case 'unlock': this.terminalSystem.unlockDoor(tag.value); break;
         case 'lock': this.terminalSystem.lockDoor(tag.value); break;
-        case 'flag': this.flags.add(tag.value); break;
+        case 'flag': this.setFlag(tag.value); break;
         case 'spawn': {
           const v = tag.value.toLowerCase();
           const kind: EnemyKind = v.includes('heavy') ? 'heavy' : v.includes('turret') ? 'turret' : v.includes('ghost') ? 'ghost' : 'drone';
@@ -583,7 +688,12 @@ export class Game {
     switch (trig.type) {
       case 'set_flag': {
         const key = data.key;
-        if (typeof key === 'string') this.flags.add(key);
+        if (typeof key === 'string') this.setFlag(key);
+        // A `next` payload turns an exit-tile flag into a level transition
+        // (e.g. Level 1's flag_exit_level → Sector 9). Deferred so the swap
+        // happens after this tick's trigger loop, not mid-iteration.
+        const next = data.next;
+        if (typeof next === 'string') this.pendingLevelId = next;
         break;
       }
       case 'spawn_ghost': {
@@ -682,6 +792,8 @@ export class Game {
     if (!this.projectiles.length) return;
     const manifest = this.levelState.manifest;
     if (!manifest) return;
+    const mapW = manifest.tiles[0]?.length ?? 0;
+    const mapH = manifest.tiles.length;
     const remaining: Projectile[] = [];
     for (const p of this.projectiles) {
       const def = WEAPONS[p.weapon];
@@ -690,7 +802,13 @@ export class Game {
       p.traveled += Math.hypot(p.vx * dt, p.vy * dt);
 
       let exploded = false;
-      if (collidesAt(manifest.tiles, manifest.cellSize, nx, ny, 0.1)) {
+      // Bounds check: explode if projectile leaves map
+      const tileX = Math.floor(nx);
+      const tileY = Math.floor(ny);
+      if (tileX < 0 || tileX >= mapW || tileY < 0 || tileY >= mapH) {
+        this.explodeProjectile(p.position, def);
+        exploded = true;
+      } else if (collidesAt(manifest.tiles, manifest.cellSize, nx, ny, 0.1)) {
         this.explodeProjectile(p.position, def);
         exploded = true;
       } else {
@@ -751,11 +869,6 @@ export class Game {
 
   private render(alpha: number, t: number): void {
     if (!this.levelState.data) return;
-    if (this.player.stats.hp <= 0) {
-      if (!this.refs.dead.hidden) {
-        // already shown
-      }
-    }
     // World
     const cam = this.player.camera();
     const motionScale = this.settings.reduceMotion ? 0.3 : 1;
@@ -763,14 +876,18 @@ export class Game {
     cam.pitch += Math.sin(this.player.bobPhase) * 0.04 * bobAmp;
     // Muzzle light: firing brightens nearby wall columns for a few frames,
     // strongest at screen center (columnLight resets after each render).
+    // Time-based decay (half-life ~40ms) instead of frame-rate dependent.
     if (this.muzzle > 0.02) {
+      const dt = this.lastRenderTime > 0 ? t - this.lastRenderTime : 1 / 60;
       const cols = this.renderer.columnLight.length;
       for (let x = 0; x < cols; x++) {
-        const t = 1 - Math.abs(x - cols / 2) / (cols / 2);
-        this.renderer.columnLight[x] = 1 + this.muzzle * 0.9 * t * t;
+        const t2 = 1 - Math.abs(x - cols / 2) / (cols / 2);
+        this.renderer.columnLight[x] = 1 + this.muzzle * 0.9 * t2 * t2;
       }
-      this.muzzle *= 0.75;
+      // Decay: muzzle *= 0.5^(dt / 0.04)  → half-life ~40ms
+      this.muzzle *= Math.pow(0.5, dt / 0.04);
     }
+    this.lastRenderTime = t;
     this.renderer.render(this.levelState.data, cam, Math.sin(this.player.bobPhase) * bobAmp * 0.05);
     // Sprites
     const sprites = this.buildSprites();
@@ -781,7 +898,7 @@ export class Game {
     this.fx.update(1 / 60);
     void alpha; void t;
 
-    if (this.player.stats.hp <= 0 && !this.refs.dead.hidden === false) {
+    if (this.player.stats.hp <= 0 && this.refs.dead.hidden) {
       this.hud.showDeathScreen(
         () => this.respawn(),
         () => { this.isPaused = true; },
@@ -882,15 +999,15 @@ export class Game {
   }
 
   respawn(): void {
+    const spawn = this.levelState.manifest?.spawn ?? { x: 2.5, y: 2.5, face: 0 };
     this.player.stats = { hp: this.player.stats.maxHp, stamina: this.player.stats.maxStamina, maxHp: this.player.stats.maxHp, maxStamina: this.player.stats.maxStamina, credits: 0 };
-    this.player.position = { x: 2.5, y: 2.5 };
-    this.player.angle = 0;
+    this.player.position = { x: spawn.x, y: spawn.y };
+    this.player.angle = (spawn.face * Math.PI) / 180;
     this.player.pitch = 0;
     this.player.refill('pistol', 18);
     this.player.refill('shotgun', 0);
     this.player.refill('pulse_rifle', 30);
     this.player.refill('rocket_launcher', 4);
-    this.deathAt = 0;
   }
 
   /** Top-level start menu dispatcher. */
@@ -917,6 +1034,11 @@ export class Game {
         this.startMenuAudio();
       },
     });
+
+    // Ensure audio context is resumed if the page was hidden while at the menu
+    if (this.audio.paused()) {
+      void this.audio.resume();
+    }
   }
 
   private startMenuAudio(): void {

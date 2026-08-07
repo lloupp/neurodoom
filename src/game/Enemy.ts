@@ -1,6 +1,6 @@
 import type { LevelData } from './Level';
 import type { Player } from './Player';
-import { deg2rad, normalizeAngle, clamp, angleDelta } from '../engine/types';
+import { normalizeAngle, clamp, angleDelta } from '../engine/types';
 
 export type EnemyState = 'IDLE' | 'PATROL' | 'ALERT' | 'CHASE' | 'ATTACK' | 'RETREAT' | 'DEAD';
 
@@ -332,5 +332,3 @@ export class EnemySystem {
   clear(): void { this.enemies = []; }
 }
 
-// silence unused
-export type _unused = { deg2rad: typeof deg2rad };

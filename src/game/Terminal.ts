@@ -1,4 +1,3 @@
-import type { MapInteractable } from './MapSchema';
 import type { LevelData } from './Level';
 import type { Player } from './Player';
 import type { ItemSnapshot } from './Item';
@@ -138,6 +137,7 @@ export class TerminalSystem {
     if (!t) return [];
     this.current = t;
     t.open = true;
+    t.hacked = true;
     const tags: LogTag[] = [];
     for (const log of t.logs) {
       if (!log.played) tags.push(...parseTags(log.transcript));
@@ -194,6 +194,5 @@ export class TerminalSystem {
   }
 
   // silence
-  private _i?: MapInteractable;
   private _f?: Set<string>;
 }

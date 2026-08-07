@@ -92,20 +92,41 @@ export class SpriteRenderer {
   private project(s: SpriteRef, cam: CameraState, zBuffer: Float32Array): Projected {
     const tx = s.position.x - cam.px;
     const ty = s.position.y - cam.py;
-    const dist = Math.sqrt(s.dist);
+    const distSq = s.dist;
+    // Guard against zero/near-zero distance (entity at camera position)
+    if (distSq <= 1e-8) {
+      return {
+        xCenter: this.width / 2,
+        yCenter: this.height / 2,
+        width: 0,
+        height: 0,
+        dist: 0,
+        bearing: 0,
+        behind: true,
+        occluded: true,
+      };
+    }
+    const dist = Math.sqrt(distSq);
     // Bearing, normalized to [-π, π]
     let bearing = Math.atan2(ty, tx) - cam.angle;
     bearing = Math.atan2(Math.sin(bearing), Math.cos(bearing));
     const behind = Math.abs(bearing) > Math.PI / 2 + cam.fov / 2;
 
-    // Distance scaling for size
-    const scale = (1 / dist) * (s.scale ?? 1);
-    const heightPx = (this.height * scale) * 0.9;
+    // Distance scaling for size — clamp minimum distance to avoid huge sprites
+    // when an entity passes extremely close to the camera.
+    const clampedDist = Math.max(dist, 0.25);
+    const scale = (1 / clampedDist) * (s.scale ?? 1);
+    const heightPx = Math.min(this.height * 2, (this.height * scale) * 0.9);
     const widthPx = heightPx;
 
     // Projected screen X (relative to camera forward)
-    const proj = (this.width / 2) / Math.tan(cam.fov / 2);
-    const xCenter = (this.width / 2) + Math.tan(bearing) * proj;
+    // Guard against division by zero if fov is 0 or very small
+    const halfFov = Math.max(1e-4, cam.fov / 2);
+    const proj = (this.width / 2) / Math.tan(halfFov);
+    // Clamp bearing to avoid tan blowing up near ±π/2
+    const maxBearing = Math.PI / 2 - 1e-4;
+    const clampedBearing = Math.max(-maxBearing, Math.min(maxBearing, bearing));
+    const xCenter = (this.width / 2) + Math.tan(clampedBearing) * proj;
     const yCenter = this.height / 2 + cam.pitch * this.height;
 
     // Z-buffer occlusion test (sample column at projected center)

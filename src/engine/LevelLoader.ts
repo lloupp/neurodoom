@@ -10,6 +10,17 @@ export interface LevelData {
 
 const COMPACT_LIST: Array<[number, string]> = [];
 
+function cloneManifest(manifest: MapManifest): MapManifest {
+  return {
+    ...manifest,
+    tiles: manifest.tiles.map((row) => row.slice()),
+    interactables: manifest.interactables.map((i) => ({ ...i })),
+    enemies: manifest.enemies.map((e) => ({ ...e, patrol: e.patrol.map((p) => [...p]) })),
+    triggers: manifest.triggers.map((t) => ({ ...t, data: t.data ? { ...t.data } : undefined })),
+    zones: manifest.zones?.map((z) => ({ ...z })) ?? [],
+  };
+}
+
 function floodCompactRoom(map: string[], w: number, h: number): Array<{ x: number; y: number; w: number; h: number }> {
   // Simple rectangular rooms: walk orthogonal runs of '.'; merge if matched.
   const rooms: Array<{ x: number; y: number; w: number; h: number }> = [];
@@ -48,25 +59,28 @@ function floodCompactRoom(map: string[], w: number, h: number): Array<{ x: numbe
 }
 
 export function loadLevel(manifest: import('../game/MapSchema').MapManifest): LevelData {
-  // Authors bring spawn + tile grid + interactions; we derive rooms for minimap.
-  const h = manifest.tiles.length;
-  const w = manifest.tiles[0]?.length ?? 0;
-  const rooms = floodCompactRoom(manifest.tiles, w, h);
+  // Clone the manifest so runtime mutations (door unlocks, etc.) don't leak
+  // into the module-level original — otherwise a replayed level keeps unlocked doors.
+  const cloned = cloneManifest(manifest);
+
+  const h = cloned.tiles.length;
+  const w = cloned.tiles[0]?.length ?? 0;
+  const rooms = floodCompactRoom(cloned.tiles, w, h);
   const wallSegments: LevelData['wallSegments'] = [];
   // Naive wall extraction — we let MapRenderer handle the real DDA.
   for (let y = 0; y < h - 1; y++) {
     for (let x = 0; x < w - 1; x++) {
-      const ch = manifest.tiles[y]?.[x] ?? '#';
+      const ch = cloned.tiles[y]?.[x] ?? '#';
       if (ch === '#' || ch === 'P' || ch === 'M' || ch === 'C' || ch === 'X') {
-        const r = manifest.tiles[y]?.[x + 1] ?? '#';
-        const d = manifest.tiles[y + 1]?.[x] ?? '#';
+        const r = cloned.tiles[y]?.[x + 1] ?? '#';
+        const d = cloned.tiles[y + 1]?.[x] ?? '#';
         if (r === '.') wallSegments.push({ from: [x + 1, y], to: [x + 1, y + 1] });
         if (d === '.') wallSegments.push({ from: [x, y + 1], to: [x + 1, y + 1] });
         void COMPACT_LIST;
       }
     }
   }
-  return { manifest, rooms, wallSegments };
+  return { manifest: cloned, rooms, wallSegments };
 }
 
 export function isSolid(ch: string): boolean {

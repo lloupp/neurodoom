@@ -11,6 +11,18 @@ export class GameAudio {
 
   constructor(private readonly bus: AudioBus) {}
 
+  /** Transform world position to audio coordinate space (matches listener in Game.update). */
+  private toAudioPos(pos: { x: number; y: number; z: number } | null): { x: number; y: number; z: number } | null {
+    if (!pos) return null;
+    // Listener uses: x = player.y * 0.05, y = 0 (vertical), z = player.x * 0.05.
+    // Match that space exactly: world y feeds panner x, world x feeds panner z, and
+    // the true vertical is the caller's z (all gameplay sounds pass z=0, i.e. same
+    // plane as the listener). Feeding world y into the vertical axis — as the first
+    // cut did — added a spurious height offset to every sound, flattening the stereo
+    // pan and inflating perceived distance.
+    return { x: pos.y * 0.05, y: pos.z * 0.05, z: pos.x * 0.05 };
+  }
+
   /** Pre-bake SFX into the AudioBus cache. Must be called after AudioBus.init(). */
   prime(): void {
     const ctx = this.bus.ctxInstance();
@@ -36,11 +48,11 @@ export class GameAudio {
 
   /** Plays an audio-log transmission on the voice bus (SPEC 4.7 — logs play on approach). */
   playLog(pos: { x: number; y: number; z: number } | null = null): void {
-    this.bus.play('voice.log', { category: 'voice', position: pos, volume: 0.5 });
+    this.bus.play('voice.log', { category: 'voice', position: this.toAudioPos(pos), volume: 0.5 });
   }
 
   playFire(weapon: WeaponId, pos: { x: number; y: number; z: number }): void {
-    const opts = { category: 'sfx' as const, position: pos, volume: 0.6 };
+    const opts = { category: 'sfx' as const, position: this.toAudioPos(pos), volume: 0.6 };
     if (weapon === 'shotgun')      this.bus.play('sfx.shotgun', opts);
     else if (weapon === 'pulse_rifle')     this.bus.play('sfx.pulse_rifle', opts);
     else if (weapon === 'rocket_launcher') this.bus.play('sfx.rocket_launcher', opts);
@@ -49,20 +61,20 @@ export class GameAudio {
 
   /** Rocket-launcher detonation (impact or splash), SPEC: Doom-parity arsenal. */
   playExplosion(pos: { x: number; y: number; z: number }): void {
-    this.bus.play('sfx.explosion', { category: 'sfx', position: pos, volume: 0.8 });
+    this.bus.play('sfx.explosion', { category: 'sfx', position: this.toAudioPos(pos), volume: 0.8 });
   }
 
   /** SPEC 4.2 — step audio palette by surface; defaults to concrete. */
   playStep(pos: { x: number; y: number; z: number }, surface: 'concrete' | 'metal' | 'organic' = 'concrete'): void {
-    this.bus.play(`sfx.footstep.${surface}`, { category: 'sfx', position: pos, volume: 0.2 });
+    this.bus.play(`sfx.footstep.${surface}`, { category: 'sfx', position: this.toAudioPos(pos), volume: 0.2 });
   }
 
   playHit(pos: { x: number; y: number; z: number }): void {
-    this.bus.play('sfx.hit', { category: 'sfx', position: pos, volume: 0.5 });
+    this.bus.play('sfx.hit', { category: 'sfx', position: this.toAudioPos(pos), volume: 0.5 });
   }
 
   playAlarm(pos: { x: number; y: number; z: number }): void {
-    this.bus.play('sfx.alarm', { category: 'sfx', position: pos, volume: 0.7 });
+    this.bus.play('sfx.alarm', { category: 'sfx', position: this.toAudioPos(pos), volume: 0.7 });
   }
 
   playUi(kind: 'beep' | 'error' | 'type'): void {

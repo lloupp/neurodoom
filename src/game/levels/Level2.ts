@@ -87,6 +87,15 @@ const level2: MapManifest = {
       ],
       sight: 9,
     },
+    {
+      // SHIVA's root-node — the Garden's heart, guarded in the Restricted Wing.
+      // Killing it ends the run (see Game.update's win check).
+      kind: 'boss',
+      x: 31.5,
+      y: 19.5,
+      patrol: [],
+      sight: 12,
+    },
   ],
   interactables: [
     // ── Doors ──

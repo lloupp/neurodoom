@@ -45,6 +45,8 @@ export class HUD {
   private currentPanel: HUDState['currentPanel'] = null;
   onSelectWeapon?: (id: WeaponId) => void;
   onReorderInventory?: (from: number, to: number) => void;
+  /** Player patched a hack slot with a token from the bank (SPEC 4.6). */
+  onHackSubmit?: (idx: number, token: string) => void;
   onSetVolume?: (cat: 'master' | 'sfx' | 'voice' | 'ambient' | 'music', v: number) => void;
   onSetSensitivity?: (v: number) => void;
   onSetDifficulty?: (d: Difficulty) => void;
@@ -56,6 +58,11 @@ export class HUD {
   onImportSave?: (file: File) => void;
   private dragFromSlot: number | null = null;
   private rebindArming: RemappableAction | null = null;
+  /** Which missing hack slot the next token click/keypress fills. */
+  private hackSelectedSlot: number | null = null;
+  /** Signature of the last-rendered hack panel, to avoid rebuilding (and
+   *  dropping in-flight clicks) every 30Hz refresh when nothing changed. */
+  private hackSig = '';
   private state: HUDState = {
     player: null,
     enemies: [],
@@ -70,7 +77,6 @@ export class HUD {
 
   constructor(private readonly refs: HUDRefs) {
     this.attachUI();
-    void this.lastPlayerTick;
   }
 
   setState(s: Partial<HUDState>): void {
@@ -193,27 +199,88 @@ export class HUD {
       (t.hacked ? '\n[HACKED] extra diagnostics available' : '');
   }
 
+  /** First missing slot whose current token isn't yet the solution. */
+  private firstUnsolvedSlot(h: NonNullable<HUDState['hackState']>): number | null {
+    return h.puzzle.missingIndices.find((i) => h.userInput.get(i) !== h.puzzle.solution[i]) ?? null;
+  }
+
   private renderHackPanel(h: NonNullable<HUDState['hackState']>): void {
     const grid = this.refs.panelHack.querySelector<HTMLElement>('[data-hack-grid]')!;
+    const tokensOl = this.refs.panelHack.querySelector<HTMLElement>('[data-hack-tokens]')!;
     const time = this.refs.panelHack.querySelector<HTMLElement>('[data-hack-time]')!;
     const traces = this.refs.panelHack.querySelector<HTMLElement>('[data-hack-traces]')!;
     const puzzle = h.puzzle;
+
+    // Keep the selected slot pointed at an editable hole: default to (and fall
+    // back to) the first slot still needing the right token, so a fresh puzzle
+    // and a corrected mistake both auto-advance without extra clicks.
+    if (this.hackSelectedSlot === null || !puzzle.missingIndices.includes(this.hackSelectedSlot)) {
+      this.hackSelectedSlot = this.firstUnsolvedSlot(h) ?? puzzle.missingIndices[0] ?? null;
+    }
+
     const lines: string[] = [];
     puzzle.program.forEach((node, i) => {
       // Separate the 3 lines visually (SPEC 4.6: "three lines of tokens").
       if (i > 0 && i % puzzle.lineWidth === 0) lines.push(`  --- LINE ${i / puzzle.lineWidth} ---`);
       const filled = h.userInput.get(i) ?? '';
       const isMissing = puzzle.missingIndices.includes(i);
-      lines.push(
-        isMissing
-          ? `  ${String(i).padStart(2)}: ${(filled || '??').padEnd(4)} // cipher: ${node.hint}${filled ? '' : ' <--'}`
-          : `  ${String(i).padStart(2)}: ${node.text.padEnd(4)}`,
-      );
+      if (!isMissing) {
+        lines.push(`  ${String(i).padStart(2)}: ${node.text.padEnd(4)}`);
+      } else {
+        const cursor = i === this.hackSelectedSlot ? ' <--' : '';
+        lines.push(`  ${String(i).padStart(2)}: ${(filled || '??').padEnd(4)} // cipher: ${node.hint}${cursor}`);
+      }
     });
     grid.textContent =
-      `// 3 lines — decode cipher (Caesar +1, e.g. NPW -> MOV):\n  --- LINE 0 ---\n${lines.join('\n')}\n\n// tokens: ${puzzle.tokenBank.join(' ')}`;
+      `// 3 lines — decode cipher (Caesar +1, e.g. NPW -> MOV):\n  --- LINE 0 ---\n${lines.join('\n')}`;
     time.textContent = `${h.timeLeft.toFixed(1)}`;
     traces.textContent = `${h.tracesLeft}`;
+
+    // Only rebuild the interactive token bank when something the player can act
+    // on changed — otherwise a 30Hz innerHTML rewrite would race in-flight clicks.
+    const filledSig = puzzle.missingIndices.map((i) => h.userInput.get(i) ?? '').join(',');
+    const sig = `${puzzle.tokenBank.join(',')}|${this.hackSelectedSlot}|${filledSig}|${h.status}`;
+    if (sig === this.hackSig) return;
+    this.hackSig = sig;
+
+    tokensOl.innerHTML = '';
+    // Slot chips: click to aim the token bank at a specific hole.
+    for (const idx of puzzle.missingIndices) {
+      const li = document.createElement('li');
+      const done = h.userInput.get(idx) === puzzle.solution[idx];
+      li.textContent = `#${idx}${done ? '✓' : ''}`;
+      li.classList.add('hack-slot');
+      if (idx === this.hackSelectedSlot) li.classList.add('active');
+      if (done) li.classList.add('solved');
+      li.onclick = () => { this.hackSelectedSlot = idx; this.hackSig = ''; this.refresh(); };
+      tokensOl.appendChild(li);
+    }
+    // Token bank: click to patch the selected slot (SPEC 4.6).
+    puzzle.tokenBank.forEach((tok, n) => {
+      const li = document.createElement('li');
+      li.textContent = n < 9 ? `${n + 1} ${tok}` : tok;
+      li.classList.add('hack-token');
+      li.onclick = () => this.submitHackToken(tok);
+      tokensOl.appendChild(li);
+    });
+  }
+
+  /** Patch the currently-selected hack slot with a token (from click or keypress). */
+  submitHackToken(token: string): void {
+    const h = this.state.hackState;
+    if (!h || h.status !== 'running' || this.hackSelectedSlot === null) return;
+    this.onHackSubmit?.(this.hackSelectedSlot, token);
+    // Force a rebuild so the fill (and the auto-advanced cursor) show at once.
+    this.hackSig = '';
+    this.refresh();
+  }
+
+  /** Pick token #n (1-based) from the current bank — keyboard shortcut path. */
+  submitHackTokenByIndex(n: number): void {
+    const h = this.state.hackState;
+    if (!h) return;
+    const tok = h.puzzle.tokenBank[n - 1];
+    if (tok) this.submitHackToken(tok);
   }
 
   private renderLogsPanel(): void {

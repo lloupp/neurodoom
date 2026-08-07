@@ -140,13 +140,23 @@ export function startHack(puzzle: HackPuzzle): HackState {
   };
 }
 
+/** Valid hack token: 2-4 uppercase ASCII letters (A-Z). */
+const TOKEN_FORMAT = /^[A-Z]{2,4}$/;
+
 export function submitToken(state: HackState, idx: number, token: string): { tracesLeft: number; correct: boolean } {
   if (state.status !== 'running') return { tracesLeft: state.tracesLeft, correct: false };
   // Only puzzle holes are editable; visible program tokens are immutable.
   if (!state.puzzle.missingIndices.includes(idx)) return { tracesLeft: state.tracesLeft, correct: false };
   state.userInput.set(idx, token);
+  // Empty string: no submission, no penalty.
   if (token.length === 0) return { tracesLeft: state.tracesLeft, correct: false };
-  const isCorrect = token.toUpperCase() === state.puzzle.solution[idx];
+  // Validate token format: must be 2-4 uppercase A-Z letters.
+  // Invalid format (lowercase, special chars, wrong length) → penalty.
+  if (!TOKEN_FORMAT.test(token)) {
+    state.tracesLeft = Math.max(0, state.tracesLeft - 1);
+    return { tracesLeft: state.tracesLeft, correct: false };
+  }
+  const isCorrect = token === state.puzzle.solution[idx];
   if (!isCorrect) {
     state.tracesLeft = Math.max(0, state.tracesLeft - 1);
     return { tracesLeft: state.tracesLeft, correct: false };

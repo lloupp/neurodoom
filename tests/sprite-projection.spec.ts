@@ -10,12 +10,23 @@ import { describe, it, expect } from 'vitest';
 function project(sx: number, sy: number, cam: { px: number; py: number; angle: number; fov: number }, screen: { w: number; h: number }) {
   const tx = sx - cam.px;
   const ty = sy - cam.py;
-  const dist = Math.hypot(tx, ty);
+  const distSq = tx * tx + ty * ty;
+  // Mirror SpriteRenderer.project's guard: an entity sitting on the camera has
+  // no defined bearing — treat it as behind/degenerate instead of dividing by 0.
+  if (distSq <= 1e-8) {
+    return { xCenter: screen.w / 2, yCenter: screen.h / 2, width: 0, height: 0, dist: 0, bearing: 0, behind: true };
+  }
+  const dist = Math.sqrt(distSq);
   let bearing = Math.atan2(ty, tx) - cam.angle;
   bearing = Math.atan2(Math.sin(bearing), Math.cos(bearing));
   const behind = Math.abs(bearing) > Math.PI / 2 + cam.fov / 2;
-  const proj = (screen.w / 2) / Math.tan(cam.fov / 2);
-  const xCenter = (screen.w / 2) + Math.tan(bearing) * proj;
+  // Guard a zero/near-zero FOV (tan(0) = 0 → division by zero) and clamp the
+  // bearing away from ±π/2 so tan can't blow up. Both mirror SpriteRenderer.
+  const halfFov = Math.max(1e-4, cam.fov / 2);
+  const proj = (screen.w / 2) / Math.tan(halfFov);
+  const maxBearing = Math.PI / 2 - 1e-4;
+  const clampedBearing = Math.max(-maxBearing, Math.min(maxBearing, bearing));
+  const xCenter = (screen.w / 2) + Math.tan(clampedBearing) * proj;
   const yCenter = screen.h / 2;
   const height = (screen.h / dist) * 0.9;
   return { xCenter, yCenter, width: height, height, dist, bearing, behind };

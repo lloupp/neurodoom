@@ -7,3 +7,8 @@ coverage/
 .env
 .env.local
 *.tsbuildinfo
+
+# estado interno do agente autoprompt
+.autoprompt/memoria.json
+.autoprompt/estado.json
+.autoprompt/logs.jsonl

@@ -133,7 +133,7 @@ describe('PALETTE', () => {
 
   it('all values are valid CSS hex colors', () => {
     const hexPattern = /^#[0-9a-f]{6}$/i;
-    for (const [k, v] of Object.entries(PALETTE)) {
+    for (const v of Object.values(PALETTE)) {
       expect(hexPattern.test(v)).toBe(true);
     }
   });

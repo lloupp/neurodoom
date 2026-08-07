@@ -120,7 +120,7 @@ const level1: MapManifest = {
   triggers: [
     { x: 14, y: 12, type: 'spawn_ghost', data: { kind: 'heavy' } },
     // Exit to Sector 9 — Garden (reached after clearing the secure lab)
-    { x: 30, y: 18, type: 'set_flag', data: { key: 'flag_exit_level' } },
+    { x: 30, y: 17, type: 'set_flag', data: { key: 'flag_exit_level', next: 'sector_9' } },
   ],
   zones: [
     { x: 0, y: 0, w: 8, h: 19, name: 'Holding Cell — Subject 14' },

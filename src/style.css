@@ -230,6 +230,18 @@ canvas {
   white-space: pre; line-height: 1.4;
 }
 
+#panel-hack [data-hack-tokens] { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+#panel-hack [data-hack-tokens] li {
+  font-family: var(--font-mono); font-size: 11px;
+  padding: 5px 8px; cursor: pointer;
+  border: 1px solid var(--neon-cyan); color: var(--neon-cyan);
+  background: rgba(75, 227, 255, 0.06); user-select: none;
+}
+#panel-hack [data-hack-tokens] li:hover { background: rgba(75, 227, 255, 0.18); }
+#panel-hack [data-hack-tokens] li.hack-slot { border-color: var(--ink-dim); color: var(--ink-dim); }
+#panel-hack [data-hack-tokens] li.hack-slot.active { border-color: var(--neon-cyan); color: var(--neon-cyan); box-shadow: 0 0 6px var(--neon-cyan); }
+#panel-hack [data-hack-tokens] li.hack-slot.solved { border-color: #63e06a; color: #63e06a; }
+
 #panel-logs ol { list-style: none; padding: 0; margin: 0; max-height: 320px; overflow: auto; }
 #panel-logs li {
   padding: 8px; border-left: 3px solid var(--neon-cyan);

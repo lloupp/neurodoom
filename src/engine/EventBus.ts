@@ -18,13 +18,20 @@ export class EventBus<EventMap extends Record<string, unknown>> {
   emit<K extends keyof EventMap>(event: K, payload: EventMap[K]): void {
     const set = this.listeners[event];
     if (!set) return;
-    for (const fn of set) {
+    // Iterate over a copy so we can safely remove the listener if it throws
+    for (const fn of [...set]) {
       try {
         fn(payload);
       } catch (err) {
-        console.error(`[EventBus] listener for ${String(event)} threw`, err);
+        console.error(`[EventBus] listener for ${String(event)} threw, removing listener`, err);
+        set.delete(fn);
       }
     }
+  }
+
+  /** Returns the number of listeners for the given event. */
+  listenerCount<K extends keyof EventMap>(event: K): number {
+    return this.listeners[event]?.size ?? 0;
   }
 
   clear<K extends keyof EventMap>(event?: K): void {

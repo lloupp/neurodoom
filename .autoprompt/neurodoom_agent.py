@@ -129,6 +129,13 @@ def rodar(objetivo=None, max_turns=None):
     memoria = Memoria()
     estado = carregar(STATE_FILE, {"objetivo": objetivo, "historico": []})
 
+    # Se o objetivo mudou, resetar histórico — senão o sistema "comprova" com
+    # resultado de uma tarefa anterior e não faz nada. Cada objetivo = novo trabalho.
+    if estado.get("objetivo") != objetivo:
+        print("🔄 Objetivo novo detectado — reiniciando estado (histórico vazio).")
+        estado = {"objetivo": objetivo, "historico": [], "progresso": "iniciando"}
+        salvar(STATE_FILE, estado)
+
     print(f"🎯 OBJETIVO: {objetivo}")
     print(f"⚙  motor: {' '.join(MOTOR_ARGS)}")
     print("=" * 60)
@@ -148,9 +155,9 @@ def rodar(objetivo=None, max_turns=None):
         # 1) GERAR briefing autônomo
         prompt = gerar_prompt(estado, memoria)
 
-        # 2) AGENTE executa sozinho
+        # 2) AGENTE executa sozinho (timeout generoso: tarefa de conteúdo demora >290s)
         try:
-            r = subprocess.run(MOTOR_ARGS + [prompt], capture_output=True, text=True, timeout=290)
+            r = subprocess.run(MOTOR_ARGS + [prompt], capture_output=True, text=True, timeout=850)
             plano = (r.stdout or "").strip()
         except Exception as e:
             plano = f"ERRO_MOTOR: {e}"

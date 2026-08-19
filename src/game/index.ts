@@ -698,8 +698,14 @@ export class Game {
       }
       case 'spawn_ghost': {
         // Defaults to an actual 'ghost' kind (matching the trigger's own name)
-        // unless data.kind explicitly overrides it.
-        const kind: EnemyKind = data.kind === 'heavy' ? 'heavy' : data.kind === 'turret' ? 'turret' : data.kind === 'drone' ? 'drone' : 'ghost';
+        // unless data.kind overrides it. The old ternary only passed through
+        // heavy/turret/drone (anything else silently became 'ghost'), so
+        // triggers like Level3's spitter ambush spawned the wrong kind. Now it
+        // passes through every valid EnemyKind (spitter/brute/wisp/stalker too).
+        const isValidKind = (k: unknown): k is EnemyKind =>
+          k === 'ghost' || k === 'heavy' || k === 'turret' || k === 'drone' ||
+          k === 'spitter' || k === 'brute' || k === 'wisp' || k === 'stalker';
+        const kind: EnemyKind = isValidKind(data.kind) ? data.kind : 'ghost';
         this.enemySystem.spawn(kind, trig.x + 0.5, trig.y + 0.5, []);
         break;
       }
@@ -768,10 +774,6 @@ export class Game {
       const damage = WEAPONS[weapon].damage * crit * falloff;
       const knockDir = angle;
       const { hits, loot } = this.enemySystem.damageAtTile(tileX, tileY, radius, damage, knockDir);
-      // Subtract ammo based on weapon.pellets for shotgun (handled by Player.update which already decremented 1)
-      if (weapon === 'shotgun') {
-        this.player.refill('shotgun', this.player.ammo.shotgun + 7);
-      }
       if (hits.length) {
         this.gameAudio.playHit({ x: r.pos.x, y: r.pos.y, z: 0 });
         this.runStats.hits++;
@@ -920,6 +922,11 @@ export class Game {
     const sprites: SpriteRef[] = [];
     // Enemies
     for (const e of this.enemySystem.snapshots()) {
+      // Cloaked stalkers are invisible until spotted (stealth ambush) — skip the
+      // sprite entirely so they can't be seen in the open or behind walls. They
+      // still exist in the world (hittable, audible, damaging) — only the visuals
+      // are suppressed.
+      if (e.isCloaked) continue;
       const dx = e.position.x - this.player.position.x;
       const dy = e.position.y - this.player.position.y;
       sprites.push({

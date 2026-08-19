@@ -131,7 +131,16 @@ export class SpriteRenderer {
 
     // Z-buffer occlusion test (sample column at projected center)
     const col = Math.max(0, Math.min(this.width - 1, Math.round(xCenter)));
-    const occluded = !behind && (zBuffer[col] - 0.05 > dist);
+    // The z-buffer stores *perpendicular* distances to wall hits (smaller = wall
+    // is closer to camera).  The sprite's Euclidean `dist` is too large when it
+    // sits at a screen edge (bearing away from center), so we convert it to the
+    // same perpendicular metric: perpDist = dist * cos(bearing).  A sprite is
+    // occluded only when a wall is closer than the sprite itself; the old
+    // `zBuffer > spriteDist` comparison was both inverted (it hid sprites that
+    // were in front of walls and showed ones behind them) and used the wrong
+    // distance metric, letting distant enemies render through walls.
+    const perpDist = dist * Math.max(0, Math.cos(bearing));
+    const occluded = !behind && (zBuffer[col] + 0.05 < perpDist);
 
     return {
       xCenter,

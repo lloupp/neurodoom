@@ -29,7 +29,7 @@ function makeLevel(): LevelData {
     interactables: [],
     triggers: [],
   };
-  // Derive rooms/walls like loadLevel would (trivial for 5x5 all-wall interior)
+  // Derive rooms/walls like loadLevel will (trivial for 5x5 all-wall interior)
   return { manifest, rooms: [], wallSegments: [] };
 }
 
@@ -295,5 +295,137 @@ describe('EnemySystem — update edge cases', () => {
     // Awareness may have risen due to LOS proximity or gunshot amplification
     // At distance < 8 with LOS, awareness rate is 0.7 higher per second
     expect(snap.awareness).toBeGreaterThan(0);
+  });
+});
+
+// ── New enemy kinds (spitter, brute, wisp, stalker) ──────────────────────────────
+
+describe('New enemy kinds — spitter, brute, wisp, stalker', () => {
+  it('spitter has medium range, moderate hp (35), drops ammo on death', () => {
+    const sys = new EnemySystem(makeLevel(), makePlayerStub());
+    sys.spawn('spitter', 2.5, 2.5, []);
+    const snap = sys.snapshots()[0];
+    expect(snap.kind).toBe('spitter');
+    expect(snap.hp).toBe(35);
+    expect(snap.state).toBe('IDLE');
+
+    const { loot } = sys.damageAtTile(2, 2, 2, 1000, 0);
+    expect(loot.map(l => l.kind).sort()).toEqual(['ammo', 'credits']);
+  });
+
+  it('brute is slow juggernaut with high hp (150) and drops medkit + keycard on death', () => {
+    const sys = new EnemySystem(makeLevel(), makePlayerStub());
+    sys.spawn('brute', 2.5, 2.5, []);
+    const snap = sys.snapshots()[0];
+    expect(snap.kind).toBe('brute');
+    expect(snap.hp).toBe(150);
+
+    const { loot } = sys.damageAtTile(2, 2, 2, 1000, 0);
+    const kinds = loot.map(l => l.kind).sort();
+    expect(kinds).toContain('medkit');
+    expect(kinds).toContain('keycard');
+    expect(kinds).toContain('credits');
+  });
+
+  it('wisp is fast and fragile (hp=22), drops ammo on death, has isWisp flag in snapshot', () => {
+    const sys = new EnemySystem(makeLevel(), makePlayerStub());
+    sys.spawn('wisp', 2.5, 2.5, []);
+    const snap = sys.snapshots()[0];
+    expect(snap.kind).toBe('wisp');
+    expect(snap.hp).toBe(22);
+    expect(snap.isWisp).toBe(true);
+
+    const { loot } = sys.damageAtTile(2, 2, 2, 1000, 0);
+    expect(loot.map(l => l.kind).sort()).toEqual(['ammo', 'credits']);
+  });
+
+  it('stalker has stealth (invisibility when not spotted, spottedAt=0), drops keycard on death', () => {
+    const sys = new EnemySystem(makeLevel(), makePlayerStub());
+    sys.spawn('stalker', 2.5, 2.5, []);
+    const snap = sys.snapshots()[0];
+    expect(snap.kind).toBe('stalker');
+    expect(snap.hp).toBe(35);
+    // Initially not spotted, so isCloaked should be true
+    expect(snap.spottedAt).toBe(0);
+    expect(snap.isCloaked).toBe(true);
+
+    const { loot } = sys.damageAtTile(2, 2, 2, 1000, 0);
+    const kinds = loot.map(l => l.kind).sort();
+    expect(kinds).toContain('keycard');
+    expect(kinds).toContain('credits');
+  });
+
+  it('spitter has lower hp than brute (35 vs 150)', () => {
+    const sys = new EnemySystem(makeLevel(), makePlayerStub());
+    sys.spawn('spitter', 1, 1, []);
+    const spitterHp = sys.snapshots()[0].hp;
+    
+    sys.clear();
+    sys.spawn('brute', 2, 1, []);
+    const bruteHp = sys.snapshots()[0].hp;
+    
+    expect(spitterHp).toBeLessThan(bruteHp);
+  });
+
+  it('wisp is faster than brute', () => {
+    const sys = new EnemySystem(makeLevel(), makePlayerStub());
+    sys.spawn('wisp', 1, 1, []);
+    sys.spawn('brute', 2, 1, []);
+
+    const snaps = sys.snapshots();
+    expect(snaps[0].kind).toBe('wisp');
+    expect(snaps[1].kind).toBe('brute');
+  });
+});
+
+describe('Enemy loot table completeness', () => {
+  const allKinds: Array<'drone' | 'heavy' | 'ghost' | 'turret' | 'boss' | 'spitter' | 'brute' | 'wisp' | 'stalker'> = [
+    'drone', 'heavy', 'ghost', 'turret', 'boss', 'spitter', 'brute', 'wisp', 'stalker'
+  ];
+
+  it.each(allKinds)('drops loot on death: $kind', (kind) => {
+    const sys = new EnemySystem(makeLevel(), makePlayerStub());
+    sys.spawn(kind, 2.5, 2.5, []);
+    const { loot } = sys.damageAtTile(2, 2, 2, 1000, 0);
+    // Every enemy drops credits on death
+    expect(loot.map(l => l.kind)).toContain('credits');
+  });
+});
+
+describe('New enemy kinds — dedupe & cloak edge', () => {
+  it.each(['boss', 'stalker'] as const)('%s drops exactly one keycard on death (no double drop)', (kind) => {
+    const sys = new EnemySystem(makeLevel(), makePlayerStub());
+    sys.spawn(kind, 2.5, 2.5, []);
+    const { loot } = sys.damageAtTile(2, 2, 2, 1000, 0);
+    const keycards = loot.filter((l) => l.kind === 'keycard');
+    expect(keycards).toHaveLength(1);
+  });
+
+  it('stalker re-cloaks after the player escapes', () => {
+    const size = 24;
+    const level = makeOpenLevel(size);
+    const player = makePlayerStub({ x: 6, y: 5 });
+    const sys = new EnemySystem(level, player);
+    sys.spawn('stalker', 5, 5, []);
+
+    // Phase 1: player close → stalker is spotted and uncloaks (visible).
+    let becameSeen = false;
+    for (let i = 0; i < 300; i++) {
+      sys.update(0.016, {});
+      if (sys.snapshots()[0].isCloaked === false) { becameSeen = true; break; }
+    }
+    expect(becameSeen).toBe(true);
+    expect(sys.snapshots()[0].isCloaked).toBe(false);
+
+    // Phase 2: player escapes far away → stalker calms down and re-cloaks.
+    player.position.x = size - 2;
+    player.position.y = size - 2;
+    let reCloaked = false;
+    for (let i = 0; i < 1000; i++) {
+      sys.update(0.016, {});
+      if (sys.snapshots()[0].isCloaked === true) { reCloaked = true; break; }
+    }
+    expect(reCloaked).toBe(true);
+    expect(sys.snapshots()[0].isCloaked).toBe(true);
   });
 });

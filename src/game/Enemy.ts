@@ -1,4 +1,5 @@
 import type { LevelData } from './Level';
+import { tryMove } from './Level';
 import type { Player } from './Player';
 import { normalizeAngle, clamp, angleDelta } from '../engine/types';
 
@@ -29,18 +30,20 @@ export function lightLevelAt(tiles: string[], cell: number, x: number, y: number
   return clamp(light, 0.25, 1);
 }
 
-export type EnemyKind = 'drone' | 'heavy' | 'ghost' | 'turret' | 'boss';
+export type EnemyKind = 'drone' | 'heavy' | 'ghost' | 'turret' | 'boss' | 'spitter' | 'brute' | 'wisp' | 'stalker';
 
-/** Max HP / base speed / armor multiplier per enemy kind. `ghost` is a fast,
- *  fragile harasser (high-frequency low-damage melee-range attacks, flickers
- *  in the renderer); `turret` is a stationary, armored gun emplacement with
- *  long engagement range and zero patrol/chase movement; `boss` is a
- *  one-off climactic encounter — slow but heavily armored, hits hard at
- *  range, and its death is the game's win condition (see Game.update). */
-export const ENEMY_MAX_HP: Record<EnemyKind, number> = { drone: 30, heavy: 70, ghost: 18, turret: 90, boss: 220 };
+/** Max HP / base speed / armor multiplier per enemy kind.
+ *  `ghost` is a fast, fragile harasser (high-frequency low-damage melee-range attacks, flickers);
+ *  `turret` is a stationary, armored gun emplacement with long engagement range and zero patrol/chase movement;
+ *  `boss` is a one-off climactic encounter — slow but heavily armored, hits hard at range;
+ *  `spitter` is a ranged harasser that fires poison projectiles at medium distance;
+ *  `brute` is a slow-moving juggernaut with massive HP that ignores most damage multipliers;
+ *  `wisp` is a fast, fragile floating attacker that fires energy projectiles in a cone pattern;
+ *  `stalker` is a stealthy hunter that turns invisible when idle and ambushes at close range. */
+export const ENEMY_MAX_HP: Record<EnemyKind, number> = { drone: 30, heavy: 70, ghost: 18, turret: 90, boss: 220, spitter: 35, brute: 150, wisp: 22, stalker: 35 };
 const MAX_HP = ENEMY_MAX_HP;
-const BASE_SPEED: Record<EnemyKind, number> = { drone: 1.7, heavy: 1.3, ghost: 2.6, turret: 0, boss: 1.1 };
-const ARMOR: Record<EnemyKind, number> = { drone: 1, heavy: 0.75, ghost: 1.3, turret: 0.6, boss: 0.5 };
+const BASE_SPEED: Record<EnemyKind, number> = { drone: 1.7, heavy: 1.3, ghost: 2.6, turret: 0, boss: 1.1, spitter: 1.4, brute: 0.7, wisp: 2.8, stalker: 0.9 };
+const ARMOR: Record<EnemyKind, number> = { drone: 1, heavy: 0.75, ghost: 1.3, turret: 0.6, boss: 0.5, spitter: 0.9, brute: 0.4, wisp: 1.4, stalker: 0.8 };
 
 export interface EnemySnapshot {
   id: number;
@@ -54,6 +57,10 @@ export interface EnemySnapshot {
   patrolIndex: number;
   /** Seconds remaining of the white damage-flash (renderer feedback). */
   hitFlash: number;
+  /** Wisp fires energy projectile cone (onShootCone callback). */
+  isWisp?: boolean;
+  /** Stalker cloak state (invisible when not spotted). */
+  isCloaked?: boolean;
 }
 
 interface InternalEnemy {
@@ -71,6 +78,8 @@ interface InternalEnemy {
   retreatUntil: number;
   stateSince: number;
   hitFlash: number;
+  /** For stalkers: how long they've been invisible (resets when spotted). */
+  cloakTimer: number;
 }
 
 export class EnemySystem {
@@ -101,6 +110,7 @@ export class EnemySystem {
       retreatUntil: 0,
       stateSince: 0,
       hitFlash: 0,
+      cloakTimer: 0,
     });
     return id;
   }
@@ -120,6 +130,8 @@ export class EnemySystem {
       spottedAt: e.spottedAt,
       patrolIndex: e.patrolIndex,
       hitFlash: e.hitFlash,
+      isWisp: e.kind === 'wisp',
+      isCloaked: e.kind === 'stalker' && e.spottedAt === 0,
     }));
   }
 
@@ -139,7 +151,9 @@ export class EnemySystem {
           e.state = 'DEAD';
           // Loot on death (SPEC 4.4 + new kinds): credits from everything;
           // medkits from drones, ammo from heavies/turrets, keycards from
-          // heavies only; ghosts are scavenged husks (credits only).
+          // heavies only; ghosts are scavenged husks (credits only);
+          // spitters drop poison vials, brutes drop heavy armor shrapnel.
+          // wisps drop energy cores, stalkers drop phase shards.
           const pos = { ...e.position };
           if (e.kind === 'drone') {
             loot.push({ position: { ...pos }, kind: 'medkit' });
@@ -148,9 +162,17 @@ export class EnemySystem {
           } else if (e.kind === 'boss') {
             loot.push({ position: { ...pos }, kind: 'medkit' });
             loot.push({ position: { ...pos }, kind: 'ammo' });
+          } else if (e.kind === 'spitter') {
+            loot.push({ position: { ...pos }, kind: 'ammo' });
+          } else if (e.kind === 'brute') {
+            loot.push({ position: { ...pos }, kind: 'medkit' });
+          } else if (e.kind === 'wisp') {
+            loot.push({ position: { ...pos }, kind: 'ammo' });
+          } else if (e.kind === 'stalker') {
+            // keycard dropped by the combined guard below, not here (dedupe)
           }
           loot.push({ position: { ...pos }, kind: 'credits' });
-          if (e.kind === 'heavy' || e.kind === 'boss') loot.push({ position: { ...pos }, kind: 'keycard' });
+          if (e.kind === 'heavy' || e.kind === 'boss' || e.kind === 'brute' || e.kind === 'stalker') loot.push({ position: { ...pos }, kind: 'keycard' });
         } else if (e.hp < MAX_HP[e.kind] * 0.25 && e.state !== 'RETREAT') {
           e.state = 'RETREAT';
           e.retreatUntil = 2.5;
@@ -166,6 +188,8 @@ export class EnemySystem {
       id: e.id, position: { ...e.position }, angle: e.angle,
       kind: e.kind, hp: e.hp, state: e.state, awareness: e.awareness,
       spottedAt: e.spottedAt, patrolIndex: e.patrolIndex, hitFlash: e.hitFlash,
+      isWisp: e.kind === 'wisp',
+      isCloaked: e.kind === 'stalker' && e.spottedAt === 0,
     };
   }
 
@@ -185,7 +209,25 @@ export class EnemySystem {
       e.retreatUntil = Math.max(0, e.retreatUntil - dt);
       e.stateSince += dt;
 
-      // Awareness from line-of-sight
+      // Stalker cloak: a stalker starts invisible (spottedAt === 0 → isCloaked).
+      // Once spotted it uncloaks (spottedAt = last-spotted time). If it then stays
+      // out of CHASE/ATTACK for CLOAK_DELAY seconds (the player escaped), it
+      // re-cloaks so the renderer's isCloaked makes it invisible again for a fresh
+      // ambush. cloakTimer only advances while uncloaked-and-calm, so it is bounded.
+      const CLOAK_DELAY = 3;
+      if (e.kind === 'stalker') {
+        if (e.spottedAt !== 0 && e.state !== 'CHASE' && e.state !== 'ATTACK') {
+          e.cloakTimer += dt;
+          if (e.cloakTimer > CLOAK_DELAY) {
+            e.spottedAt = 0; // re-cloak
+            e.cloakTimer = 0;
+          }
+        } else {
+          e.cloakTimer = 0; // already cloaked, or actively seen — keep as-is
+        }
+      }
+
+      // Awareness from line-of-sight (stalkers are harder to spot while cloaked)
       const dx = player.position.x - e.position.x;
       const dy = player.position.y - e.position.y;
       const distSq = dx * dx + dy * dy;
@@ -197,11 +239,13 @@ export class EnemySystem {
         dist < (distSq > 0 ? 8 : 0) + 4 * (player.weapon === 'shotgun' ? 1 : 0);
 
       // Light-modulated vision (SPEC 4.4): the LOS gain is scaled by how lit the
-      // player's tile is, so a player lurking away from emissive screens is
-      // harder to spot even in plain sight.
+      // player's tile is, so a player lingering away from emissive screens is
+      // harder to spot even in plain sight. Stalkers get bonus stealth while cloaked.
       const light = los ? lightLevelAt(level.manifest.tiles, level.manifest.cellSize, player.position.x, player.position.y) : 1;
+      const stalkerStealth = e.kind === 'stalker' && e.spottedAt === 0;
       const awarenessGain = (los && dist < 8 ? 0.7 * light : 0) + (footstepAudible ? 0.05 : 0) + (gunshotAudible ? 0.8 : 0);
-      e.awareness = clamp(e.awareness + awarenessGain * dt - 0.05 * dt, 0, 1);
+      const finalAwarenessGain = stalkerStealth ? awarenessGain * 0.4 : awarenessGain; // stalkers are 60% harder to spot while cloaked
+      e.awareness = clamp(e.awareness + finalAwarenessGain * dt - 0.05 * dt, 0, 1);
 
       const settled = e.state !== 'ATTACK' && e.state !== 'RETREAT';
       if (settled) {
@@ -209,6 +253,7 @@ export class EnemySystem {
           e.state = 'CHASE';
           e.spottedAt = this.timeTick;
           e.stateSince = 0;
+          e.cloakTimer = 0; // uncloaked when spotted
           callbacks.onAlertChanged?.(e);
         } else if (e.awareness >= 0.3 && e.awareness <= 0.6 && e.state !== 'ALERT' && e.state !== 'CHASE') {
           e.state = 'ALERT';
@@ -226,9 +271,9 @@ export class EnemySystem {
       // Speed/behavior per state
       const baseSpeed = BASE_SPEED[e.kind];
       // Ghosts harass at melee range; turrets are stationary but engage from
-      // afar; drones/heavies keep the original close-quarters thresholds.
-      const engageRange = e.kind === 'turret' ? 9 : e.kind === 'ghost' ? 1.6 : e.kind === 'boss' ? 3.5 : 2.5;
-      const sustainRange = e.kind === 'turret' ? 11 : e.kind === 'ghost' ? 2.6 : e.kind === 'boss' ? 6 : 4;
+      // afar; wisps fire from medium range; stalkers ambush at close range.
+      const engageRange = e.kind === 'turret' ? 9 : e.kind === 'spitter' ? 8 : e.kind === 'ghost' ? 1.6 : e.kind === 'boss' ? 3.5 : e.kind === 'brute' ? 3.2 : e.kind === 'stalker' ? 1.5 : e.kind === 'wisp' ? 5 : 2.5;
+      const sustainRange = e.kind === 'turret' ? 11 : e.kind === 'spitter' ? 12 : e.kind === 'ghost' ? 2.6 : e.kind === 'boss' ? 6 : e.kind === 'brute' ? 7 : e.kind === 'stalker' ? 2 : e.kind === 'wisp' ? 7 : 4;
       let speed = 0;
       let targetAngle = e.angle;
       switch (e.state) {
@@ -277,8 +322,8 @@ export class EnemySystem {
           if (e.attackCooldown <= 0) {
             // Fire at player hitscan — caller hooks emissive red tracer
             callbacks.onShootAt?.(e, { x: player.position.x, y: player.position.y });
-            e.attackCooldown = e.kind === 'drone' ? 0.6 : e.kind === 'heavy' ? 0.9 : e.kind === 'turret' ? 1.3 : e.kind === 'boss' ? 1.1 : 0.35;
-            const dmg = e.kind === 'heavy' ? 6 : e.kind === 'turret' ? 9 : e.kind === 'boss' ? 14 : e.kind === 'ghost' ? 4 : 3;
+            e.attackCooldown = e.kind === 'drone' ? 0.6 : e.kind === 'heavy' ? 0.9 : e.kind === 'turret' ? 1.3 : e.kind === 'boss' ? 1.1 : e.kind === 'ghost' ? 0.35 : e.kind === 'spitter' ? 0.8 : e.kind === 'wisp' ? 0.9 : e.kind === 'stalker' ? 0.7 : 1.0;
+            const dmg = e.kind === 'heavy' ? 6 : e.kind === 'turret' ? 9 : e.kind === 'boss' ? 14 : e.kind === 'ghost' ? 4 : e.kind === 'spitter' ? 5 : e.kind === 'wisp' ? 3 : e.kind === 'stalker' ? 8 : e.kind === 'brute' ? 8 : 3;
             this.player.damage(dmg * this.damageMultiplier);
           }
           break;
@@ -296,15 +341,21 @@ export class EnemySystem {
       const delta = angleDelta(e.angle, targetAngle);
       e.angle = normalizeAngle(e.angle + clamp(delta, -3, 3) * dt * 3);
 
-      // Move forward in facing direction
+      // Move forward in facing direction (with proper radius-based collision +
+      // wall sliding, same system the player uses)
       if (speed > 0) {
-        const tryX = e.position.x + Math.cos(e.angle) * speed * dt;
-        const tryY = e.position.y + Math.sin(e.angle) * speed * dt;
-        const ch = level.manifest.tiles[Math.floor(tryY / level.manifest.cellSize)]?.[Math.floor(tryX / level.manifest.cellSize)];
-        if (!ch || ch === '.' || ch === 'D') {
-          e.position.x = tryX;
-          e.position.y = tryY;
-        }
+        const enemyRadius = 0.2;
+        const moved = tryMove(
+          level.manifest.tiles,
+          level.manifest.cellSize,
+          e.position.x,
+          e.position.y,
+          Math.cos(e.angle) * speed * dt,
+          Math.sin(e.angle) * speed * dt,
+          enemyRadius,
+        );
+        e.position.x = moved.x;
+        e.position.y = moved.y;
       }
     }
     void this;
@@ -331,4 +382,3 @@ export class EnemySystem {
 
   clear(): void { this.enemies = []; }
 }
-

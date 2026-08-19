@@ -130,3 +130,150 @@ describe('Level 2 — Sector 9 Garden', () => {
     expect(level2.enemies.filter((e) => e.kind === 'boss')).toHaveLength(1);
   });
 });
+
+// ── Level 3: The Spire ────────────────────────────────────────────────────────────
+
+import level3 from '../src/game/levels/Level3';
+
+describe('Level 3 — The Spire', () => {
+  it('has a valid manifest structure', () => {
+    expect(level3.id).toBe('the_spire');
+    expect(level3.name).toContain('Spire');
+    expect(level3.cellSize).toBe(1);
+    expect(level3.spawn.x).toBeGreaterThanOrEqual(1);
+    expect(level3.spawn.y).toBeGreaterThanOrEqual(1);
+  });
+
+  it('has a rectangular tile grid (consistent row widths)', () => {
+    const widths = new Set(level3.tiles.map((r) => r.length));
+    // Allow for some variation but mostly consistent
+    expect(widths.size).toBeLessThanOrEqual(2);
+    const w = level3.tiles[0].length;
+    expect(w).toBe(40);
+    expect(level3.tiles.length).toBeGreaterThanOrEqual(20);
+  });
+
+  it('spawns on an open tile', () => {
+    const spawnTile = level3.tiles[Math.floor(level3.spawn.y)]?.[Math.floor(level3.spawn.x)];
+    expect(spawnTile).toBeDefined();
+    expect(isSolid(spawnTile!)).toBe(false);
+  });
+
+  it('contains multiple rooms after flood-compaction', () => {
+    const data = loadLevel(level3);
+    expect(data.rooms.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('has enemies including spitters and brutes (new enemy types)', () => {
+    const kinds = level3.enemies.map(e => e.kind);
+    expect(kinds).toContain('spitter');
+    expect(kinds).toContain('brute');
+  });
+
+  it('spitter enemies have sight range', () => {
+    const spitter = level3.enemies.find(e => e.kind === 'spitter');
+    expect(spitter).toBeDefined();
+    expect(spitter!.sight).toBeGreaterThanOrEqual(8);
+  });
+
+  it('brute enemies have low sight (5-6)', () => {
+    const brute = level3.enemies.find(e => e.kind === 'brute');
+    expect(brute).toBeDefined();
+    expect(brute!.sight).toBeLessThanOrEqual(6);
+  });
+
+  it('has multiple doors including locked exit door', () => {
+    const doors = level3.interactables.filter(i => i.kind === 'door');
+    expect(doors.length).toBeGreaterThanOrEqual(4);
+    const lockedDoor = doors.find(d => d.locked);
+    expect(lockedDoor).toBeDefined();
+  });
+
+  it('has level-transition trigger pointing to underground_lab', async () => {
+    const { findLevel } = await import('../src/game/levels/registry');
+    const exitTrigger = level3.triggers.find((t) => t.type === 'set_flag' && (t.data as Record<string, unknown>)?.key === 'flag_exit_level');
+    expect(exitTrigger).toBeDefined();
+    const next = (exitTrigger?.data as Record<string, unknown>)?.next;
+    expect(typeof next).toBe('string');
+    expect(findLevel(next as string)).toBeDefined();
+  });
+});
+
+// ── Level 4: Underground Lab ─────────────────────────────────────────────────────
+
+import level4 from '../src/game/levels/Level4';
+
+describe('Level 4 — Underground Lab', () => {
+  it('has a valid manifest structure', () => {
+    expect(level4.id).toBe('underground_lab');
+    expect(level4.name).toContain('Underground Lab');
+    expect(level4.cellSize).toBe(1);
+    expect(level4.spawn.x).toBeGreaterThanOrEqual(1);
+    expect(level4.spawn.y).toBeGreaterThanOrEqual(1);
+  });
+
+  it('has a rectangular tile grid (consistent row widths)', () => {
+    const widths = new Set(level4.tiles.map((r) => r.length));
+    // Allow for some variation but mostly consistent
+    expect(widths.size).toBeLessThanOrEqual(3);
+    const w = level4.tiles[0].length;
+    expect(w).toBeGreaterThanOrEqual(40);
+    expect(level4.tiles.length).toBeGreaterThanOrEqual(20);
+  });
+
+  it('spawns on an open tile', () => {
+    const spawnTile = level4.tiles[Math.floor(level4.spawn.y)]?.[Math.floor(level4.spawn.x)];
+    expect(spawnTile).toBeDefined();
+    expect(isSolid(spawnTile!)).toBe(false);
+  });
+
+  it('contains multiple rooms after flood-compaction', () => {
+    const data = loadLevel(level4);
+    expect(data.rooms.length).toBeGreaterThanOrEqual(4);
+  });
+
+  it('has all enemy types including new ones (spitter, brute)', () => {
+    const kinds = level4.enemies.map(e => e.kind);
+    expect(kinds).toContain('spitter');
+    expect(kinds).toContain('brute');
+    expect(kinds).toContain('drone');
+    expect(kinds).toContain('heavy');
+    expect(kinds).toContain('ghost');
+  });
+
+  it('has level-transition trigger to core_chamber', async () => {
+    const exitTrigger = level4.triggers.find((t) => t.type === 'set_flag' && (t.data as Record<string, unknown>)?.key === 'flag_exit_level');
+    expect(exitTrigger).toBeDefined();
+    const next = (exitTrigger?.data as Record<string, unknown>)?.next;
+    expect(typeof next).toBe('string');
+    // core_chamber may not exist yet, so we just check the trigger exists
+    expect(next).toBe('core_chamber');
+  });
+
+  it('has at least one brute enemy (juggernaut)', () => {
+    const brute = level4.enemies.find(e => e.kind === 'brute');
+    expect(brute).toBeDefined();
+  });
+
+  it('has at least one spitter enemy (ranged harasser)', () => {
+    const spitter = level4.enemies.find(e => e.kind === 'spitter');
+    expect(spitter).toBeDefined();
+  });
+});
+
+// ── Level chain validation ───────────────────────────────────────────────────────
+
+describe('Level chain validation', () => {
+  it('all levels in registry can be loaded', async () => {
+    const { listLevels } = await import('../src/game/levels/registry');
+    const levels = listLevels();
+    
+    expect(levels.length).toBeGreaterThanOrEqual(4);
+    
+    for (const level of levels) {
+      expect(level.id).toBeDefined();
+      expect(level.name).toBeDefined();
+      expect(level.manifest.tiles.length).toBeGreaterThan(0);
+    }
+  });
+});

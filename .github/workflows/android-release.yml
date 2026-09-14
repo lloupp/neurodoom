@@ -21,7 +21,7 @@ jobs:
   build-apk:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Resolve release tag
         id: rel
@@ -32,7 +32,7 @@ jobs:
             echo "tag=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
           fi
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -53,6 +53,7 @@ jobs:
 
       - name: Quality gate
         run: |
+          npm run audit:runtime
           npm run lint
           npm run typecheck
           npm test

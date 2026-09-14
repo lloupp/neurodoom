@@ -240,7 +240,27 @@ export class Game {
     }
   }
 
-  begin(): void {
+  begin(levelId: string | null = 'sublevel_3'): void {
+    // Starting after the pause/main-menu path must always reactivate simulation.
+    // A true new run additionally discards every piece of run-scoped state;
+    // Continue passes null here because load() already reconstructed that state.
+    this.isPaused = false;
+    this.isHacking = false;
+    this.hackState = null;
+    this.hackingTargetId = null;
+    this.pendingLevelId = null;
+    this.projectiles = [];
+    this.hud.setPanel(null);
+    this.refs.dead.hidden = true;
+
+    if (levelId !== null) {
+      this.flags.clear();
+      this.playTimeMs = 0;
+      this.lastAutosaveMs = 0;
+      this.firedTriggers.clear();
+      this.player.reset({ x: 2.5, y: 2.5, face: 0 });
+    }
+
     this.hasWon = false;
     this.refs.win.hidden = true;
     this.lastHp = this.player.stats.hp;
@@ -249,7 +269,9 @@ export class Game {
     this.muzzle = 0;
     this.runStats = { kills: 0, shots: 0, hits: 0 };
     this.fx.bossBar(null);
-    this.loadLevelById('sublevel_3');
+    if (levelId !== null && !this.loadLevelById(levelId)) {
+      throw new Error(`Unknown start level: ${levelId}`);
+    }
     this.shell.start({
       update: (dt, t) => this.update(dt, t),
       render: (alpha, t) => this.render(alpha, t),
@@ -282,7 +304,7 @@ export class Game {
     return true;
   }
 
-  loadLevelById(id: string): boolean {
+  loadLevelById(id: string, autosave = true): boolean {
     const rec = findLevel(id);
     if (!rec) return false;
     const loaded = loadLevel(rec.manifest);
@@ -320,7 +342,7 @@ export class Game {
       }
     }
     this.firedTriggers.clear();
-    void this.save();
+    if (autosave) void this.save();
     return true;
   }
 
@@ -993,15 +1015,24 @@ export class Game {
       stats: Player['stats']; weapon: WeaponId; ammo: Player['ammo']; inventory: string[];
       flags: string[]; level: string; time: number;
     };
-    this.loadLevelById(data.level);
+
+    // World flags must exist before the level runtime is reconstructed because
+    // loadLevelById uses them to reopen flag-gated doors.
+    this.flags = new Set(data.flags);
+    if (!this.loadLevelById(data.level, false)) return false;
+
+    // Restore every player field that snapshot() persists. Avoid sharing mutable
+    // objects with parsed save data so gameplay cannot mutate the save payload.
     this.player.position = { x: data.px, y: data.py };
     this.player.angle = data.angle;
     this.player.pitch = data.pitch;
-    this.player.stats = data.stats;
-    this.player.ammo = data.ammo;
+    this.player.fov = data.fov;
+    this.player.weapon = data.weapon;
+    this.player.stats = { ...data.stats };
+    this.player.ammo = { ...data.ammo };
     this.player.setInventory(data.inventory);
-    this.flags = new Set(data.flags);
     this.playTimeMs = data.time;
+    this.lastAutosaveMs = data.time;
     return true;
   }
 
@@ -1035,9 +1066,10 @@ export class Game {
         await this.audio.init();
         this.applySettings();
         this.gameAudio.prime();
-        await this.load();
+        const loaded = await this.load();
+        if (!loaded) return;
         this.input.requestPointerLock();
-        this.begin();
+        this.begin(null);
         this.startMenuAudio();
       },
     });

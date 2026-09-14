@@ -53,6 +53,7 @@ jobs:
 
       - name: Quality gate
         run: |
+          npm run audit
           npm run audit:runtime
           npm run lint
           npm run typecheck

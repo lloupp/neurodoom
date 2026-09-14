@@ -995,15 +995,24 @@ export class Game {
       stats: Player['stats']; weapon: WeaponId; ammo: Player['ammo']; inventory: string[];
       flags: string[]; level: string; time: number;
     };
+
+    // World flags must exist before the level runtime is reconstructed because
+    // loadLevelById uses them to reopen flag-gated doors.
+    this.flags = new Set(data.flags);
     if (!this.loadLevelById(data.level, false)) return false;
+
+    // Restore every player field that snapshot() persists. Avoid sharing mutable
+    // objects with parsed save data so gameplay cannot mutate the save payload.
     this.player.position = { x: data.px, y: data.py };
     this.player.angle = data.angle;
     this.player.pitch = data.pitch;
-    this.player.stats = data.stats;
-    this.player.ammo = data.ammo;
+    this.player.fov = data.fov;
+    this.player.weapon = data.weapon;
+    this.player.stats = { ...data.stats };
+    this.player.ammo = { ...data.ammo };
     this.player.setInventory(data.inventory);
-    this.flags = new Set(data.flags);
     this.playTimeMs = data.time;
+    this.lastAutosaveMs = data.time;
     return true;
   }
 

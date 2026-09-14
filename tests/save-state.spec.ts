@@ -44,7 +44,7 @@ describe('SaveState validation', () => {
 
   it('rejects unknown weapons and incomplete ammo maps', () => {
     expect(parseGameSaveData({ ...validData(), weapon: 'railgun' })).toBeNull();
-    const { rocket_launcher: _rocket, ...incompleteAmmo } = validData().ammo;
+    const incompleteAmmo = { pistol: 12, shotgun: 5, pulse_rifle: 18 };
     expect(parseGameSaveData({ ...validData(), ammo: incompleteAmmo })).toBeNull();
   });
 

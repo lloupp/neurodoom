@@ -23,17 +23,20 @@ GameShell (RAF loop, fixed-timestep simulation)
 
 ## Quickstart
 
+Requires **Node.js 22.12+**.
+
 ```bash
 npm install
 npm run dev      # http://localhost:5173
 npm test         # vitest
+npm run audit    # full dependency audit (dev + runtime)
 npm run lint
 npm run typecheck
 npm run build
 npm run test:e2e # production preview + Chromium smoke/regression test
 ```
 
-CI (`.github/workflows/ci.yml`) runs runtime dependency audit → lint → typecheck → unit tests → production build → browser regression test on every push/PR.
+CI (`.github/workflows/ci.yml`) runs full dependency audit → runtime audit → lint → typecheck → unit tests → production build → browser regression test on every push/PR.
 
 Desktop: click anywhere — pointer-lock engages. WASD + mouse look. `E` to interact with terminals and doors. `1/2/3/4` to swap weapons. `I` opens inventory. `Esc` pauses and opens Options (audio/sensitivity/key rebinding/difficulty/accessibility/save export-import).
 
@@ -78,7 +81,4 @@ Multiplayer, WebGL/WebGPU, online leaderboards, and full mod tooling remain outs
 
 ## License
 
-All rights reserved — see [LICENSE](./LICENSE). This codebase is not open source;
-contact the copyright holder for licensing terms. (This file is a placeholder
-license text, not legal advice — have it reviewed by a lawyer before shipping
-commercially.)
+Proprietary. All rights reserved.

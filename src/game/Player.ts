@@ -51,6 +51,13 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
   rocket_launcher: { id: 'rocket_launcher', name: 'M-90 Fragline',      damage: 65, fireRate: 0.9,spread: 0.015, pellets: 1, range: 16, recoilPitch: 0.14, recoilYaw: 0.06,  ammoType: 'rocket', ammoCapacity: 4, projectileSpeed: 9, splashRadius: 2.2 },
 };
 
+const DEFAULT_AMMO: Record<WeaponId, number> = {
+  pistol: 36,
+  shotgun: 12,
+  pulse_rifle: 60,
+  rocket_launcher: 4,
+};
+
 export class Player {
   readonly id = 1;
   position: { x: number; y: number };
@@ -59,7 +66,7 @@ export class Player {
   fov: number;
   stats: PlayerStats;
   weapon: WeaponId = 'pistol';
-  ammo: Record<WeaponId, number> = { pistol: 36, shotgun: 12, pulse_rifle: 60, rocket_launcher: 4 };
+  ammo: Record<WeaponId, number> = { ...DEFAULT_AMMO };
   readonly inventory = new Set<string>();
   isMoving = false;
   bobPhase = 0;
@@ -78,6 +85,23 @@ export class Player {
     this.fov = 1.05;
     this.radius = radius;
     this.stats = { hp: 100, maxHp: 100, stamina: 100, maxStamina: 100, credits: 0 };
+  }
+
+  /** Restore all mutable run-scoped state to deterministic defaults. */
+  reset(spawn: { x: number; y: number; face: number }): void {
+    this.position = { x: spawn.x, y: spawn.y };
+    this.angle = deg2rad(spawn.face);
+    this.pitch = 0;
+    this.fov = 1.05;
+    this.stats = { hp: 100, maxHp: 100, stamina: 100, maxStamina: 100, credits: 0 };
+    this.weapon = 'pistol';
+    this.ammo = { ...DEFAULT_AMMO };
+    this.inventory.clear();
+    this.isMoving = false;
+    this.bobPhase = 0;
+    this.cooldown = 0;
+    this.bobAmp = 0;
+    this.recentFootstep = 0;
   }
 
   setSensitivity(v: number): void { this.mouseSensitivity = v; }

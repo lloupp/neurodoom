@@ -13,10 +13,10 @@ const DB = 'neurodoom';
 const STORE = 'saves';
 const DB_VERSION = 1;
 
-const SCHEMA_VERSION = 1 as const;
+export const SAVE_SCHEMA_VERSION = 1 as const;
 
 export interface SaveRecord {
-  schema_version: typeof SCHEMA_VERSION;
+  schema_version: typeof SAVE_SCHEMA_VERSION;
   saved_at: number;
   play_time_ms: number;
   data: unknown;
@@ -58,7 +58,7 @@ const withStore = <T>(
 
 export async function writeSlot(key: string, data: unknown, playTimeMs: number): Promise<void> {
   const rec: SaveRecord = {
-    schema_version: SCHEMA_VERSION,
+    schema_version: SAVE_SCHEMA_VERSION,
     saved_at: Date.now(),
     play_time_ms: playTimeMs,
     data,

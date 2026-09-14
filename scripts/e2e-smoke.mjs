@@ -2,6 +2,9 @@ import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import { preview } from 'vite';
 
+const previewPath = process.env.E2E_PATH ?? '/';
+const previewUrl = new URL(previewPath, 'http://127.0.0.1:4173').toString();
+
 const server = await preview({
   preview: {
     host: '127.0.0.1',
@@ -42,7 +45,7 @@ try {
       document.exitPointerLock = function exitPointerLock() {};
     });
 
-    await page.goto('http://127.0.0.1:4173', { waitUntil: 'networkidle' });
+    await page.goto(previewUrl, { waitUntil: 'networkidle' });
     await page.locator('#boot').waitFor({ state: 'visible' });
     assert.equal(await page.locator('canvas').count(), 3, 'render canvases must mount');
     assert.equal(await page.locator('[data-act="newgame"]').isVisible(), true, 'new game must be available');

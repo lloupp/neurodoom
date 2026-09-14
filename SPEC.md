@@ -13,7 +13,7 @@ The mood: industrial, claustrophobic, neon-lit, dripping. Think *System Shock 2*
 1. **Atmosphere over spectacle.** Silence is weaponized; vents breathe; lights flicker on a timer. Lighting is the level designer.
 2. **HUD as character.** Information density first, ornamentation second. The HUD is what the player IS, not what the player sees.
 3. **World as conversation.** Doors, terminals, panels, signs — all "talk". Hacking, logging, inventory — all are ways of listening back.
-4. **Modular dungeons.** Every level = a JSON; every system = a folder. Designers iterate, coders don't block.
+4. **Modular dungeons.** Every level = one typed manifest; every system = a folder. Designers iterate, coders don't block.
 
 ## 3. Stack
 
@@ -28,6 +28,7 @@ The mood: industrial, claustrophobic, neon-lit, dripping. Think *System Shock 2*
 | Persistence | IndexedDB (raw, zero-dep) | Saves, audio cache, progress flags |
 | Levels | `.ts` `MapManifest` registry | One typed, tree-shaken manifest per level |
 | Assets | Procedural textures (canvas noise) | No external downloads; deterministic |
+| Mobile | Capacitor Android + touch overlay | Reuses the browser runtime with native packaging |
 
 ## 4. Systems
 
@@ -37,13 +38,15 @@ The mood: industrial, claustrophobic, neon-lit, dripping. Think *System Shock 2*
 - Wall sliding on collision (no full stop — Doom-style)
 
 ### 4.2 Player Controller
-- WASD + mouse look (pointer lock)
+- Desktop: WASD + mouse look (pointer lock)
+- Touch: on-screen movement stick, drag-to-look and action buttons
 - Circle-radius collision against the tile grid (wall-sliding, no full stop)
 - Stamina system: sprint → drains, idle → recovers
 - Headbob timed with footsteps; step audio palette by surface
 
 ### 4.3 Combat
 - Hitscan weapons first (pistol, shotgun, pulse-rifle)
+- Projectile launcher support for rockets
 - Damage = base × crit × distance-falloff × armor
 - Enemy hit-react + telegraphed attacks
 - Death state → reload from autosave
@@ -52,10 +55,10 @@ The mood: industrial, claustrophobic, neon-lit, dripping. Think *System Shock 2*
 States: `IDLE → PATROL → ALERT → CHASE → ATTACK → RETREAT → DEAD`
 - Sound cones (sense footsteps, gunshots)
 - Vision cones (line-of-sight, light-modulated)
-- Patrol paths hardcoded in MAP.json
+- Patrol paths authored in level manifests
 - Drop loot on death (credits, ammo, keycards)
-- Kinds: `drone`, `heavy`, `ghost`, `turret`, and a one-per-level `boss` (higher HP/armor/damage, larger sprite scale). A level's `boss` dying is the run's win condition — see 4.11.
-- Difficulty (`easy`/`normal`/`hard`, picked in Settings) scales only enemy→player damage via `EnemySystem.setDamageMultiplier`.
+- Kinds include `drone`, `heavy`, `ghost`, `turret`, `spitter`, `brute`, `wisp`, `stalker`, and a one-per-level `boss`.
+- Difficulty (`easy`/`normal`/`hard`, picked in Settings) scales enemy→player damage via `EnemySystem.setDamageMultiplier`.
 
 ### 4.5 Inventory
 - Slot grid (12 hot + 4 weapon)
@@ -82,13 +85,15 @@ States: `IDLE → PATROL → ALERT → CHASE → ATTACK → RETREAT → DEAD`
 
 ### 4.9 Persistence
 - Save slots: `neurodoom:save:N`
-- Atomic writes (write-then-replace)
+- IndexedDB transaction-backed writes
 - Versions: `schema_version` field on root
 - Autosave: every 30s + on level transition
+- Save export/import through JSON in the Options panel
 
 ### 4.10 Level Registry
-- `src/game/levels/registry.ts` lists `MAP.json` imports
+- `src/game/levels/registry.ts` lists typed `MapManifest` modules
 - Levels gated by `flag:` items; saves carry flag set forward
+- Campaign transitions are data-driven from manifest triggers
 
 ### 4.11 Settings, Accessibility & Crash Logging
 - `engine/Settings.ts`: persisted to `localStorage` (`neurodoom:settings`), separate from save slots — audio volumes (master/sfx/voice/ambient/music), mouse sensitivity, difficulty, reduce-motion flag
@@ -96,7 +101,7 @@ States: `IDLE → PATROL → ALERT → CHASE → ATTACK → RETREAT → DEAD`
 - Accessibility: reduce-motion dampens headbob; terminal/log audio always paired with a synced on-screen transcript (never audio-only); HUD bars/ammo/items labeled with text, not color alone
 - Save export/import: a save slot can be exported/imported as a JSON file from the Options panel
 - `engine/ErrorLog.ts`: `window.onerror` / `unhandledrejection` captured to `localStorage` (`neurodoom:errorlog`, last 50 entries) for post-crash diagnostics
-- Win condition: a level's `boss` enemy reaching `DEAD` state ends the run with an ending screen (see 4.4)
+- Win condition: the final level's boss reaching `DEAD` ends the run with an ending screen; earlier bosses gate progression
 
 ## 5. File Layout
 
@@ -109,6 +114,7 @@ neurodoom/
 ├─ vite.config.ts
 ├─ vitest.config.ts
 ├─ index.html              # Mount root (#root); HUD markup is built in main.ts
+├─ android/                # Capacitor Android native project
 ├─ src/
 │  ├─ main.ts              # Boot + DOM/HUD markup injection
 │  ├─ style.css            # Globals (CSS vars, scanlines, layout)
@@ -120,12 +126,13 @@ neurodoom/
 │  │  ├─ EventBus.ts       # Typed pub/sub
 │  │  ├─ State.ts          # Global game state container
 │  │  ├─ Input.ts          # Mouse + keyboard, pointer-lock
+│  │  ├─ TouchControls.ts  # On-screen mobile/touch controls
 │  │  ├─ Audio.ts          # AudioBus with PannerNode (HRTF)
 │  │  ├─ Persistence.ts    # IndexedDB wrapper (raw, zero-dep)
 │  │  ├─ Assets.ts         # Texture/sound loaders (procedural + cache)
 │  │  ├─ Procedural.ts     # Canvas noise textures + audio synths
-│  │  ├─ Settings.ts       # Options menu state (audio/sensitivity/difficulty), localStorage-persisted
-│  │  ├─ ErrorLog.ts       # window.onerror/unhandledrejection capture, localStorage-persisted
+│  │  ├─ Settings.ts       # Options state
+│  │  ├─ ErrorLog.ts       # Runtime error capture
 │  │  └─ LevelLoader.ts    # Builds runtime LevelData from a MapManifest
 │  └─ game/
 │     ├─ index.ts          # Game orchestrator (loop wiring, systems)
@@ -143,19 +150,14 @@ neurodoom/
 │     ├─ Audio.ts          # Game audio: alarms, footsteps, logs, music
 │     └─ levels/
 │        ├─ registry.ts    # Level records (id/name/manifest)
-│        └─ Level1.ts      # Vertical slice manifest (Sublevel 3)
+│        └─ Level*.ts      # Campaign manifests
 └─ tests/                  # vitest specs
-   ├─ hacking.spec.ts
-   ├─ level.spec.ts
-   ├─ math.spec.ts
-   ├─ scenario.spec.ts     # lexer, triggers, door gating, enemy BT, loot, inventory
-   └─ sprite-projection.spec.ts
 ```
 
 > Levels are TypeScript `MapManifest` modules (not loose `.json` files) so they
 > tree-shake and type-check; designers still edit one self-contained file per
 > level. Audio samples are synthesized at runtime (`Procedural.ts`), so there is
-> no `public/` or `assets/` directory to ship.
+> no external asset pack required for the core build.
 
 ## 6. Vertical Slice (Milestone 0→6)
 
@@ -171,20 +173,19 @@ Milestone defining goals; collapses to features at build time.
 | 5 | Save / load | Reload preserves progress |
 | 6 | Polish pass | Scanlines, vignette, main menu, settings |
 
-Level 1 ships all 7 milestones end-to-end so a fresh player can complete ~10 minutes of "feel" playthrough.
+The current build extends beyond the original vertical slice with multiple registered levels, additional enemy archetypes, touch controls and Android packaging.
 
-## 7. Out of Scope (MVP)
+## 7. Out of Scope (current build)
 
 - Multiplayer
-- Mobile / touch input
 - WebGL / WebGPU
 - Shader-based lighting
-- Mod tooling beyond MAP.json
+- Full mod tooling beyond typed level manifests
 - Online leaderboards
 
-These are *intentional*. The vertical slice proves the core; expansion comes in v0.2.
+These remain intentional scope boundaries for the current renderer/gameplay. Android/touch support has graduated into the build through Capacitor and on-screen controls.
 
-## 8. Open Questions (post-scaffold)
+## 8. Open Questions
 
 - Energy meter vs HP-only?
 - Voice cast: synthesis or silence?

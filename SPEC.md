@@ -49,7 +49,7 @@ The mood: industrial, claustrophobic, neon-lit, dripping. Think *System Shock 2*
 - Projectile launcher support for rockets
 - Damage = base × crit × distance-falloff × armor
 - Enemy hit-react + telegraphed attacks
-- Death state → reload from autosave
+- Death state → respawn at the current level's start, losing current unsaved progress
 
 ### 4.4 Enemies (BehaviorTree, not Utility AI)
 States: `IDLE → PATROL → ALERT → CHASE → ATTACK → RETREAT → DEAD`

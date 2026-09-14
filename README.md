@@ -30,11 +30,14 @@ npm test         # vitest
 npm run lint
 npm run typecheck
 npm run build
+npm run test:e2e # production preview + Chromium smoke/regression test
 ```
 
-CI (`.github/workflows/ci.yml`) runs lint → typecheck → test → build on every push/PR.
+CI (`.github/workflows/ci.yml`) runs runtime dependency audit → lint → typecheck → unit tests → production build → browser regression test on every push/PR.
 
-Click anywhere — pointer-lock engages. WASD + mouse look. `E` to interact with terminals and doors. `1/2/3/4` to swap weapons. `I` opens inventory. `Esc` pauses and opens Options (audio/sensitivity/key rebinding/difficulty/accessibility/save export-import).
+Desktop: click anywhere — pointer-lock engages. WASD + mouse look. `E` to interact with terminals and doors. `1/2/3/4` to swap weapons. `I` opens inventory. `Esc` pauses and opens Options (audio/sensitivity/key rebinding/difficulty/accessibility/save export-import).
+
+Touch devices mount on-screen movement, look and action controls automatically. The Android project is packaged through Capacitor and can be built from the `Android APK` GitHub Actions workflow.
 
 ## Settings & Accessibility
 
@@ -50,28 +53,28 @@ Runtime errors are captured to `localStorage` (`neurodoom:errorlog`, last 50 ent
 
 ## Level Design
 
-Levels are JSON. Each `MapManifest` declares:
+Levels are typed TypeScript manifests. Each `MapManifest` declares:
 
 - A tile grid (string array, single chars per tile)
 - Player spawn
-- Enemy patrols + sight ranges (`drone`/`heavy`/`ghost`/`turret`, plus a one-off `boss` per level)
+- Enemy patrols + sight ranges
 - Interactables (doors, terminals, audio logs, keycards, medkits, ammo)
-- Persistent `flag:` triggers unlocking doors / spawning ghosts
+- Persistent `flag:` triggers unlocking doors / spawning enemies / transitioning levels
 
-See `src/game/levels/Level1.ts` for the reference (Sublevel 3, Meridian Blacksite). Its climactic encounter — SHIVA's warden, gated behind the secure-lab hacking puzzle — is the current build's win condition: killing it ends the run with an ending screen.
+See `src/game/levels/Level1.ts` for the original reference slice and `src/game/levels/registry.ts` for the current registered campaign levels.
 
 ## Pillars
 
 1. **Atmosphere over spectacle** — lighting is the level designer.
 2. **HUD as character** — DOM overlay is the player-view of their own body.
 3. **World as conversation** — every terminal is a way of *listening* to the level.
-4. **Modular dungeons** — every level = a JSON, every system = a folder.
+4. **Modular dungeons** — every level = one typed manifest, every system = a folder.
 
 See `SPEC.md` for the full design doc.
 
-## Out of Scope (MVP)
+## Out of Scope (current build)
 
-Multiplayer, mobile/touch, WebGL, online leaderboards. v0.2 territory.
+Multiplayer, WebGL/WebGPU, online leaderboards, and full mod tooling remain outside the current scope. Android/touch support is already present through Capacitor and on-screen controls.
 
 ## License
 

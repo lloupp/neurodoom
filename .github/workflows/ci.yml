@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [master, main]
+    branches: [master, main, gauntlet/dev-deps-audit]
   pull_request:
 
 permissions:
@@ -18,6 +18,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Diagnostic full dependency audit
+        run: npm audit --audit-level=low || true
       - run: npm run audit:runtime
       - run: npm run lint
       - run: npm run typecheck

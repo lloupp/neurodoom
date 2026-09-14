@@ -100,7 +100,7 @@ try {
 
     assert.match(
       await page.locator('[data-weapon-name]').innerText(),
-      /HX Disruptor/,
+      /HX DISRUPTOR/,
       'Continue must restore the saved weapon',
     );
     assert.match(

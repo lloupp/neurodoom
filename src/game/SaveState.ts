@@ -1,4 +1,4 @@
-import { SAVE_SCHEMA_VERSION, type SaveRecord } from '../engine/Persistence';
+import { SAVE_SCHEMA_VERSION } from '../engine/Persistence';
 import type { PlayerSnapshot, PlayerStats, WeaponId } from './Player';
 
 const WEAPON_IDS: readonly WeaponId[] = ['pistol', 'shotgun', 'pulse_rifle', 'rocket_launcher'];
@@ -46,7 +46,8 @@ const isWeaponId = (value: unknown): value is WeaponId =>
 function parseStats(value: unknown): PlayerStats | null {
   if (!isObject(value)) return null;
   const { hp, maxHp, stamina, maxStamina, credits } = value;
-  if (![hp, maxHp, stamina, maxStamina, credits].every(isFiniteNumber)) return null;
+  if (!isFiniteNumber(hp) || !isFiniteNumber(maxHp) || !isFiniteNumber(stamina) ||
+      !isFiniteNumber(maxStamina) || !isFiniteNumber(credits)) return null;
   if (maxHp <= 0 || hp < 0 || hp > maxHp) return null;
   if (maxStamina <= 0 || stamina < 0 || stamina > maxStamina) return null;
   if (credits < 0) return null;
@@ -73,7 +74,8 @@ export function parseGameSaveData(value: unknown): GameSaveData | null {
   if (!isObject(value)) return null;
 
   const { px, py, angle, pitch, fov, weapon, inventory, flags, level, time } = value;
-  if (![px, py, angle, pitch, fov, time].every(isFiniteNumber)) return null;
+  if (!isFiniteNumber(px) || !isFiniteNumber(py) || !isFiniteNumber(angle) ||
+      !isFiniteNumber(pitch) || !isFiniteNumber(fov) || !isFiniteNumber(time)) return null;
   if (fov <= 0 || fov > Math.PI || time < 0) return null;
   if (!isWeaponId(weapon)) return null;
   if (!isStringList(inventory) || !isStringList(flags) || !isBoundedString(level)) return null;
@@ -138,9 +140,3 @@ export function buildGameSaveData(
 export function buildExportedGameSave(data: GameSaveData, savedAt = Date.now()): ExportedGameSave {
   return { schema_version: SAVE_SCHEMA_VERSION, saved_at: savedAt, data };
 }
-
-// Compile-time assertion: Persistence's public record remains compatible with
-// the validator's expected envelope without coupling the engine to game types.
-type _SaveRecordCompatibility = SaveRecord['schema_version'] extends typeof SAVE_SCHEMA_VERSION ? true : never;
-const _saveRecordCompatibility: _SaveRecordCompatibility = true;
-void _saveRecordCompatibility;

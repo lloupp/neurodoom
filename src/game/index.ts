@@ -241,6 +241,26 @@ export class Game {
   }
 
   begin(levelId: string | null = 'sublevel_3'): void {
+    // Starting after the pause/main-menu path must always reactivate simulation.
+    // A true new run additionally discards every piece of run-scoped state;
+    // Continue passes null here because load() already reconstructed that state.
+    this.isPaused = false;
+    this.isHacking = false;
+    this.hackState = null;
+    this.hackingTargetId = null;
+    this.pendingLevelId = null;
+    this.projectiles = [];
+    this.hud.setPanel(null);
+    this.refs.dead.hidden = true;
+
+    if (levelId !== null) {
+      this.flags.clear();
+      this.playTimeMs = 0;
+      this.lastAutosaveMs = 0;
+      this.firedTriggers.clear();
+      this.player.reset({ x: 2.5, y: 2.5, face: 0 });
+    }
+
     this.hasWon = false;
     this.refs.win.hidden = true;
     this.lastHp = this.player.stats.hp;

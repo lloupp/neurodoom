@@ -98,6 +98,17 @@ try {
     await page.locator('#hud').waitFor({ state: 'visible' });
     await page.waitForTimeout(300);
 
+    assert.match(
+      await page.locator('[data-weapon-name]').innerText(),
+      /HX Disruptor/,
+      'Continue must restore the saved weapon',
+    );
+    assert.match(
+      await page.locator('[data-weapon-ammo]').innerText(),
+      /^5\s*\/\s*0$/,
+      'Continue must restore the saved weapon ammo',
+    );
+
     const record = await page.evaluate(async () => {
       const request = indexedDB.open('neurodoom', 1);
       const db = await new Promise((resolve, reject) => {

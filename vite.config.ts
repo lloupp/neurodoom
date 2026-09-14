@@ -6,7 +6,10 @@ const dir = typeof import.meta.dirname !== 'undefined'
   ? import.meta.dirname
   : (path.resolve(new URL('.', import.meta.url).pathname) || '/home/ubuntu/neurodoom');
 
+const base = process.env.GITHUB_PAGES === 'true' ? '/neurodoom/' : '/';
+
 export default defineConfig({
+  base,
   resolve: {
     alias: {
       '@engine': path.resolve(dir, 'src/engine'),

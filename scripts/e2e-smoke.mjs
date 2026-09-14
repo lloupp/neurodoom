@@ -1,33 +1,14 @@
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
 import { chromium } from 'playwright';
+import { preview } from 'vite';
 
-const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-const server = spawn(npm, ['run', 'preview', '--', '--host', '127.0.0.1', '--port', '4173'], {
-  stdio: ['ignore', 'pipe', 'pipe'],
+const server = await preview({
+  preview: {
+    host: '127.0.0.1',
+    port: 4173,
+    strictPort: true,
+  },
 });
-
-let serverOutput = '';
-server.stdout.on('data', (chunk) => { serverOutput += chunk; });
-server.stderr.on('data', (chunk) => { serverOutput += chunk; });
-
-const stopServer = () => {
-  if (!server.killed) server.kill('SIGTERM');
-};
-
-async function waitForServer() {
-  const deadline = Date.now() + 20_000;
-  while (Date.now() < deadline) {
-    try {
-      const response = await fetch('http://127.0.0.1:4173');
-      if (response.ok) return;
-    } catch {
-      // Preview is still starting.
-    }
-    await new Promise((resolve) => setTimeout(resolve, 200));
-  }
-  throw new Error(`preview server did not become ready\n${serverOutput}`);
-}
 
 async function readSave(page) {
   return page.evaluate(async () => {
@@ -48,8 +29,6 @@ async function readSave(page) {
 }
 
 try {
-  await waitForServer();
-
   const browser = await chromium.launch({ headless: true });
   try {
     const page = await browser.newPage();
@@ -170,5 +149,7 @@ try {
     await browser.close();
   }
 } finally {
-  stopServer();
+  await new Promise((resolve, reject) => {
+    server.httpServer.close((error) => error ? reject(error) : resolve());
+  });
 }

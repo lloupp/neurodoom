@@ -2,11 +2,11 @@ name: CI
 
 on:
   push:
-    branches: [master, main, gauntlet/dev-deps-audit]
+    branches: [master, main]
   pull_request:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
@@ -17,13 +17,8 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - name: Refresh lockfile for dependency hardening
-        run: |
-          npm install --package-lock-only --ignore-scripts
-          npm audit fix --package-lock-only --ignore-scripts || true
       - run: npm ci
-      - name: Full dependency audit
-        run: npm audit --audit-level=moderate
+      - run: npm run audit
       - run: npm run audit:runtime
       - run: npm run lint
       - run: npm run typecheck
@@ -31,15 +26,3 @@ jobs:
       - run: npm run build
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
-      - name: Persist validated lockfile
-        if: github.ref == 'refs/heads/gauntlet/dev-deps-audit'
-        run: |
-          if git diff --quiet -- package-lock.json; then
-            echo "Lockfile already current"
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add package-lock.json
-          git commit -m "chore: refresh audited dependency lockfile"
-          git push

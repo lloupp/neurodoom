@@ -29,6 +29,24 @@ async function waitForServer() {
   throw new Error(`preview server did not become ready\n${serverOutput}`);
 }
 
+async function readSave(page) {
+  return page.evaluate(async () => {
+    const request = indexedDB.open('neurodoom', 1);
+    const db = await new Promise((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    const tx = db.transaction('saves', 'readonly');
+    const get = tx.objectStore('saves').get('neurodoom:save:0');
+    const result = await new Promise((resolve, reject) => {
+      get.onsuccess = () => resolve(get.result);
+      get.onerror = () => reject(get.error);
+    });
+    db.close();
+    return result;
+  });
+}
+
 try {
   await waitForServer();
 
@@ -109,25 +127,44 @@ try {
       'Continue must restore the saved weapon ammo',
     );
 
-    const record = await page.evaluate(async () => {
-      const request = indexedDB.open('neurodoom', 1);
-      const db = await new Promise((resolve, reject) => {
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error);
-      });
-      const tx = db.transaction('saves', 'readonly');
-      const get = tx.objectStore('saves').get('neurodoom:save:0');
-      const result = await new Promise((resolve, reject) => {
-        get.onsuccess = () => resolve(get.result);
-        get.onerror = () => reject(get.error);
-      });
-      db.close();
-      return result;
-    });
+    const continuedSave = await readSave(page);
+    assert.equal(continuedSave.data.level, 'sector_9', 'Continue must preserve the saved level');
+    assert.equal(continuedSave.data.px, 6.5, 'Continue must preserve the saved X position');
+    assert.equal(continuedSave.data.py, 6.5, 'Continue must preserve the saved Y position');
+    assert.equal(continuedSave.data.weapon, 'shotgun', 'Continue must not overwrite the saved weapon');
+    assert.deepEqual(continuedSave.data.flags, ['story:test'], 'Continue must preserve saved world flags');
 
-    assert.equal(record.data.level, 'sector_9', 'Continue must preserve the saved level');
-    assert.equal(record.data.px, 6.5, 'Continue must preserve the saved X position');
-    assert.equal(record.data.py, 6.5, 'Continue must preserve the saved Y position');
+    // Exercise the second lifecycle edge: Continue -> pause -> Main Menu -> New Run.
+    // A fresh run must not inherit any state from the continued session and must
+    // restart simulation even though Main Menu was entered from a paused game.
+    await page.keyboard.press('Escape');
+    const mainMenuButton = page.locator('[data-act="mainmenu"]');
+    await mainMenuButton.waitFor({ state: 'visible' });
+    await mainMenuButton.click();
+    await page.locator('#boot').waitFor({ state: 'visible' });
+    await page.locator('[data-act="newgame"]').click();
+    await page.locator('#hud').waitFor({ state: 'visible' });
+    await page.waitForTimeout(500);
+
+    assert.match(
+      await page.locator('[data-weapon-name]').innerText(),
+      /VANBRCK-7 PISTOL/i,
+      'New Run must reset the active weapon',
+    );
+    assert.match(
+      await page.locator('[data-weapon-ammo]').innerText(),
+      /^36\s*\/\s*0$/,
+      'New Run must reset weapon ammo',
+    );
+
+    const newRunSave = await readSave(page);
+    assert.equal(newRunSave.data.level, 'sublevel_3', 'New Run must restart at the first level');
+    assert.equal(newRunSave.data.weapon, 'pistol', 'New Run must persist the default weapon');
+    assert.equal(newRunSave.data.stats.credits, 0, 'New Run must reset credits');
+    assert.deepEqual(newRunSave.data.inventory, [], 'New Run must clear inventory');
+    assert.deepEqual(newRunSave.data.flags, [], 'New Run must clear world flags');
+    assert.ok(newRunSave.data.time < 1000, 'New Run must reset accumulated play time');
+
     assert.deepEqual(pageErrors, [], `page errors: ${pageErrors.join('; ')}`);
   } finally {
     await browser.close();

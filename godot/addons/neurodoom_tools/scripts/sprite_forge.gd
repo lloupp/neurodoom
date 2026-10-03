@@ -1,6 +1,17 @@
 @tool
 extends RefCounted
 
+const DIRECTIONS := [
+	"front_left",
+	"back_left",
+	"back_right",
+	"front_right",
+	"front",
+	"left",
+	"back",
+	"right"
+]
+
 static func build_manifest(source_dir: String, output_path: String) -> String:
 	var files: Array[String] = []
 	_collect(source_dir, files)
@@ -12,20 +23,19 @@ static func build_manifest(source_dir: String, output_path: String) -> String:
 		if ext not in ["png", "webp", "svg"]:
 			continue
 		var stem := path.get_file().get_basename()
-		var parts := stem.split("_")
-		if parts.size() < 3:
+		var parsed := _parse_stem(stem)
+		if parsed.is_empty():
 			continue
-		var frame_token := parts[parts.size() - 1]
-		var direction := parts[parts.size() - 2]
-		var anim_parts := parts.slice(0, parts.size() - 2)
-		var animation := "_".join(anim_parts)
-		var key := animation + "/" + direction
+		var key := str(parsed["animation"]) + "/" + str(parsed["direction"])
 		if not animations.has(key):
 			animations[key] = []
 		animations[key].append({
-			"frame": int(frame_token),
+			"frame": parsed["frame"],
 			"path": path
 		})
+
+	for key in animations:
+		animations[key].sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a["frame"]) < int(b["frame"]))
 
 	var manifest := {
 		"schema": 1,
@@ -40,6 +50,28 @@ static func build_manifest(source_dir: String, output_path: String) -> String:
 		return "FAILED: could not write " + output_path
 	file.store_string(JSON.stringify(manifest, "\t"))
 	return "OK: %d sprite files -> %s" % [files.size(), output_path]
+
+static func _parse_stem(stem: String) -> Dictionary:
+	var frame_separator := stem.rfind("_")
+	if frame_separator <= 0:
+		return {}
+	var frame_token := stem.substr(frame_separator + 1)
+	if not frame_token.is_valid_int():
+		return {}
+	var prefix := stem.substr(0, frame_separator)
+
+	for direction in DIRECTIONS:
+		var suffix := "_" + direction
+		if prefix.ends_with(suffix):
+			var animation := prefix.left(prefix.length() - suffix.length())
+			if animation.is_empty():
+				return {}
+			return {
+				"animation": animation,
+				"direction": direction,
+				"frame": int(frame_token)
+			}
+	return {}
 
 static func _collect(path: String, out: Array[String]) -> void:
 	var dir := DirAccess.open(path)

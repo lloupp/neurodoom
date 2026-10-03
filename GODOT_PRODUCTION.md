@@ -2,7 +2,11 @@
 
 The original TypeScript/browser game remains intact and is treated as an executable design reference.
 
-The production game now lives in `godot/` and targets Godot 4.
+The production game now lives in `godot/`.
+
+## Recommended editor
+
+Use **Godot 4.7.2 Standard** for the current production branch.
 
 ## Goal
 
@@ -18,7 +22,7 @@ PLAYER -> COMBAT -> TERMINAL -> RESTORE POWER -> OPEN SECURITY DOOR -> REACH SHI
 
 ## Open it
 
-1. Install Godot 4.x.
+1. Install Godot 4.7.2 Standard.
 2. Open Godot Project Manager.
 3. Import `godot/project.godot`.
 4. Open the project.
@@ -37,11 +41,11 @@ Controls:
 
 ## Production tooling
 
-The Godot editor plugin adds commands for:
+The Godot editor plugin exposes the vertical slice, Enemy Lab, Weapon Lab, Material/Lighting Lab, asset validation and Sprite Forge under the Tools menu.
 
-- running the vertical slice;
-- validating the production asset structure;
-- building a sprite manifest from directional animation frames.
+Additional reusable authoring pieces are under `godot/scenes/tools/` for level blocks, encounter triggers and story terminals.
+
+Playtests automatically write structured JSON events to `user://playtest_*.json` when the slice is completed.
 
 See `godot/art/STYLE_GUIDE.md`.
 

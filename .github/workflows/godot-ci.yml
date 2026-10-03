@@ -1,0 +1,47 @@
+name: Godot Production
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - 'godot/**'
+      - 'GODOT_PRODUCTION.md'
+      - '.github/workflows/godot-ci.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'godot/**'
+      - 'GODOT_PRODUCTION.md'
+      - '.github/workflows/godot-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  godot-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Godot 4.7.2
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.2
+          use-dotnet: false
+          include-templates: false
+
+      - name: Import project
+        run: godot --headless --path godot --import
+
+      - name: Smoke vertical slice
+        run: godot --headless --path godot --scene res://scenes/main.tscn --quit-after 8
+
+      - name: Smoke enemy lab
+        run: godot --headless --path godot --scene res://scenes/labs/enemy_lab.tscn --quit-after 4
+
+      - name: Smoke weapon lab
+        run: godot --headless --path godot --scene res://scenes/labs/weapon_lab.tscn --quit-after 4
+
+      - name: Smoke material lab
+        run: godot --headless --path godot --scene res://scenes/labs/material_lab.tscn --quit-after 4

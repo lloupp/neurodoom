@@ -57,7 +57,10 @@ func _build_weapon_view() -> void:
 	add_child(weapon_layer)
 
 	weapon_rect = TextureRect.new()
-	weapon_rect.texture = load("res://art/placeholder/weapon_shotgun.svg")
+	var weapon_atlas := AtlasTexture.new()
+	weapon_atlas.atlas = load("res://art/runtime/weapons/shotgun_sheet.svg")
+	weapon_atlas.region = Rect2(Vector2.ZERO, Vector2(768, 460))
+	weapon_rect.texture = weapon_atlas
 	weapon_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	weapon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	weapon_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE

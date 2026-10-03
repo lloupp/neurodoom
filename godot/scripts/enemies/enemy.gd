@@ -8,6 +8,19 @@ extends CharacterBody3D
 @export var detection_range := 18.0
 @export var attack_range := 1.5
 
+const ENEMY_SHEETS := {
+	"drone": "res://art/runtime/enemies/drone_sheet.svg",
+	"heavy": "res://art/runtime/enemies/heavy_sheet.svg",
+	"ghost": "res://art/runtime/enemies/ghost_sheet.svg",
+	"turret": "res://art/runtime/enemies/turret_sheet.svg",
+	"boss": "res://art/runtime/enemies/boss_sheet.svg",
+	"spitter": "res://art/runtime/enemies/spitter_sheet.svg",
+	"brute": "res://art/runtime/enemies/brute_sheet.svg",
+	"wisp": "res://art/runtime/enemies/wisp_sheet.svg",
+	"stalker": "res://art/runtime/enemies/stalker_sheet.svg"
+}
+const FRAME_SIZE := Vector2(256, 320)
+
 var health := 80
 var attack_cooldown := 0.0
 var target: Node3D
@@ -31,9 +44,17 @@ func _build_collision() -> void:
 
 func _build_sprite() -> void:
 	sprite = Sprite3D.new()
-	sprite.texture = load("res://art/placeholder/enemy_heavy.svg")
+	var sheet_path := str(ENEMY_SHEETS.get(enemy_kind, ENEMY_SHEETS["heavy"]))
+	var atlas := AtlasTexture.new()
+	atlas.atlas = load(sheet_path)
+	atlas.region = Rect2(Vector2.ZERO, FRAME_SIZE)
+	sprite.texture = atlas
 	sprite.position.y = 1.15
 	sprite.pixel_size = 0.0042
+	if enemy_kind == "boss":
+		sprite.pixel_size = 0.0056
+	elif enemy_kind in ["drone", "wisp"]:
+		sprite.pixel_size = 0.0037
 	sprite.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	sprite.alpha_cut = SpriteBase3D.ALPHA_CUT_DISCARD
 	sprite.shaded = true

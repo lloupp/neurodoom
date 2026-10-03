@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="512" viewBox="0 0 1024 512">
+<defs>
+  <linearGradient id="metal" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#4b535e"/><stop offset=".45" stop-color="#202630"/><stop offset="1" stop-color="#0c1016"/></linearGradient>
+  <linearGradient id="grip" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#272b31"/><stop offset="1" stop-color="#090b0f"/></linearGradient>
+  <filter id="g"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+</defs>
+<g stroke="#080b10" stroke-width="10" stroke-linejoin="round">
+  <path d="M174 239 L772 190 L944 245 L938 315 L725 320 L263 351 L138 313 Z" fill="url(#metal)"/>
+  <path d="M344 205 L768 170 L873 197 L781 221 L346 249 Z" fill="#303845"/>
+  <path d="M335 327 L472 319 L449 462 L340 484 L287 424 Z" fill="url(#grip)"/>
+  <path d="M725 320 L836 314 L811 404 L731 421 L681 366 Z" fill="url(#grip)"/>
+  <path d="M583 218 L741 206 L757 238 L590 251 Z" fill="#10161d"/>
+  <path d="M603 220 L686 214 L690 229 L607 234 Z" fill="#ff2f73" stroke-width="3" filter="url(#g)"/>
+  <path d="M816 224 L940 248 L936 287 L823 277 Z" fill="#151a21"/>
+  <path d="M193 258 L349 244 L344 291 L201 304 Z" fill="#10151b"/>
+</g>
+<g fill="#ff2f73" filter="url(#g)">
+  <rect x="497" y="271" width="71" height="8" rx="4"/>
+  <path d="M640 273 l22 -17 22 17 -22 17 z"/>
+</g>
+<path d="M91 445 C220 401 335 403 435 484 L70 512 L0 512 L0 487 Z" fill="#131820"/>
+<path d="M773 412 C857 401 931 420 1024 484 L1024 512 L718 512 Z" fill="#11161c"/>
+</svg>

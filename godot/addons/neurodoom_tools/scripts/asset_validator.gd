@@ -26,6 +26,7 @@ static func validate() -> PackedStringArray:
 		report.append("PASS production structure is valid")
 	else:
 		report.append("FAIL %d required paths are missing" % failures)
+	report.append_array(validate_runtime())
 	return report
 
 static func _count_art_files(path: String) -> int:
@@ -43,3 +44,27 @@ static func _count_art_files(path: String) -> int:
 		item = dir.get_next()
 	dir.list_dir_end()
 	return total
+
+static func validate_runtime() -> PackedStringArray:
+	var report := PackedStringArray()
+	var path := "res://art/runtime/runtime_manifest.json"
+	var manifest = JSON.parse_string(FileAccess.get_file_as_string(path))
+	if not manifest is Dictionary or manifest.get("schema") != 1:
+		return PackedStringArray(["FAIL runtime manifest schema"])
+	var failures := 0
+	for family in ["enemies","weapons"]:
+		var size := Vector2(2048,1600) if family == "enemies" else Vector2(3840,460)
+		for id in manifest.get(family,[]):
+			var sheet := "res://art/runtime/%s/%s_sheet.svg" % [family,id]
+			if not ResourceLoader.exists(sheet):
+				failures += 1
+				report.append("FAIL missing " + sheet)
+				continue
+			var texture: Texture2D = load(sheet)
+			if texture.get_size() != size:
+				failures += 1
+				report.append("FAIL dimensions " + sheet)
+			else: report.append("OK sheet " + id)
+	report.append("INFO baseline: one temporal pose per state/direction; authored multi-frame motion and directional silhouette refinement still needed")
+	report.append("PASS runtime contract" if failures == 0 else "FAIL %d runtime sheets" % failures)
+	return report

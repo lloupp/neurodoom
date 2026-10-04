@@ -21,7 +21,7 @@ func _exit_tree() -> void:
 	remove_tool_menu_item("NEURODOOM: Build Sprite Manifest")
 
 func _run_slice() -> void:
-	get_editor_interface().play_main_scene()
+	get_editor_interface().play_custom_scene("res://scenes/main.tscn")
 
 func _run_enemy_lab() -> void:
 	get_editor_interface().play_custom_scene("res://scenes/labs/enemy_lab.tscn")

@@ -92,3 +92,7 @@ Families:
 ## Performance
 
 Billboards and viewmodels must be atlas-friendly. Avoid giant transparent borders and unnecessary 4K runtime textures.
+
+## Runtime baseline contract (authoritative for existing sheets)
+
+The source preferences above are not runtime atlas dimensions. Preserve `runtime/runtime_manifest.json`: enemy cells 256×320 in an 8×5 grid; weapon cells 768×460 in five state columns (idle, fire, recoil, reload, empty). Runtime has one pose per state/direction. Do not count directions as temporal frames. Optional sequential numbered enemy sheets retain the same grid. Feet/baseline and silhouette consistency require visual verification in Enemy Lab.

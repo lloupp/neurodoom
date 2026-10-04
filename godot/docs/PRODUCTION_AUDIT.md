@@ -1,0 +1,51 @@
+# Production audit — 2026-10-04 UTC
+
+Reference: PR #10, branch `feat/godot-production-vertical-slice`, baseline `d2ae08088e213ad3d1e54f84000797c1ae36a7be`. No changes to `src/` or master. Read production docs, style/source contract, runtime manifest, all Godot scripts/scenes/tools, web Enemy/Player/Assets and Level1–4, campaign registry and orchestration (save/menu/hacking/projectile paths).
+
+## Baseline gates and findings
+
+- npm audit and runtime audit: zero vulnerabilities; lint/typecheck/build passed; 17 files / 288 unit tests passed.
+- Initial web E2E could not start without Chromium. Installed matching headless shell from Chrome for Testing and reran successfully. Playwright CDN download returned a truncated zip; dependency failure was not a game failure.
+- Godot 4.7.2 official Standard imported and ran all four scenes headless.
+- P1: Sprite Forge did not compile (`suffix` inferred from untyped loop). Godot returned success despite an import diagnostic. Corrected explicit type and added a runner that rejects errors/warnings/leaks in logs as well as nonzero exit.
+- P1: Enemies caused contact damage without occlusion. Added body collision, LOS before telegraph and resolution, swept projectile rays and blast occlusion.
+- P1: Save retained no defeated enemies, pickups, inventory or campaign. Added validated schema v2, backups, temporary writes and scene reconstruction. Loading an earlier save rebuilds the world instead of only emitting forward door signals.
+- P1: ESC released mouse while enemies kept attacking. Now scene-tree pause, death and menu input states stop simulation.
+- P2: Every enemy was the same chasing heavy, every shot a single shotgun ray. Replaced with catalogs, differentiated states/attacks and four weapon functions.
+- P2: HUD missed initial player signals; completion offered no menu return. HUD reads initial state and final screen has a working menu action.
+- P1: Imported SVG symbols expanded to the whole sheet because `<use>` had no explicit cell dimensions. Fixed use dimensions, compatible references and per-cell clipping; inspected the real Godot-imported pixels. Added nonempty cell tests.
+- P2: Sheets existed but only the top-left frame was used. Added cached directional/state region selection and explicit single-pose temporal handling.
+
+## Web systems missing from baseline Godot
+
+| Web reference system | Native outcome / remaining work |
+| --- | --- |
+| Four weapon definitions, switching, rocket simulation, splash | Native magazines, timed reloads, pellets, automatic pulse, swept projectiles and occluded blast implemented. Balance remains provisional. |
+| Nine enemy kinds, armor, patrol/alert/chase/retreat/death, perception | Native catalog and state machine, LOS, sound investigation, cloak, ranged projectiles, strafing, Warden telegraph/volley/shockwave/half-health cooldown implemented. Local steering is not global pathfinding. |
+| Inventory/credits/keys/logs | Native persistent arrays and pickups, TAB summary; drag/reorder hotbar and full inventory browser not ported. |
+| Terminals, transcript/tag events and hacking puzzle | Native short transcript feedback, sector power/card/containment gates and data-driven story component. Full hacking minigame/tag language not ported. |
+| Four maps/registry/transitions | Five compact authored Godot sectors using native LevelBlock; web geometry not copied. Layout and resource tuning need human testing. |
+| Stamina/difficulty/light-modulated awareness | Native acceleration/sprint/head/weapon bob and settings; stamina, difficulty and light-based stealth not implemented. |
+| Audio mixer/adaptive threat/voices | Native buses, bounded SFX pool and original synthesized temporary sounds/music/ambient. Spatial mixing/adaptive score/recorded logs remain. Headless does not start audio playback. |
+| FX/boss intro/HP/death/final stats | Native transient impacts, flash, hitmarker, damage overlay/shake, boss HP bar and ending stats. Final decals/particles/true vignette shader remain. |
+| Menu/pause/options/save import/export | Native menu/pause/options/validated Continue/checkpoint/save v2; user save-file import/export UI not implemented. |
+| Map renderer/procedural materials/browser touch/platform shell | Native collision/3D environment/block kit/labs/export presets; procedural texture pipeline, touch/Android deferred. |
+| Local telemetry | Native event timing/level/objective durations/combat/pickup/death positions and run summary, local files only. |
+
+## Art truth
+
+Runtime sheets override preferred *source* sizes: enemy 2048×1600 (8 directions × 5 states, cell 256×320), weapon 3840×460 (5 states, cell 768×460). Each cell currently contains **one** pose. Eight columns are directions, not temporal frames. Several directions reuse a silhouette or mirrored art. Baseline remains intact; no generated art passed off as final.
+
+SpriteController uses cached atlas regions and frame timers, procedural baseline bob/hit/death motion. Optional sequential `<kind>_sheet_001.png` etc retain the same grid and can supply painted temporal frames. Final per-direction silhouettes and authored multi-frame animations are still P2 production work. Weapon states sequence fire/recoil/reload/empty with bob/sway/muzzle flash; current sheets remain single-pose states.
+
+## Validation boundaries
+
+`production_tests.tscn` traverses all sectors by **debug fulfillment** of objectives: structural evidence only. Its normal ray/LOS/damage/reload/input cases are actual engine/physics tests, but do not prove combat feel. `simulation_playthrough.tscn` separately uses normal movement, collision, ammo, damage and ray interaction without teleports/HP overrides/forced kills; its result must be reported explicitly.
+
+Desktop exports are test builds. Linux is runnable headless locally. Windows export is not proof of Windows execution. This environment cannot establish an X11/Wayland display (including attempted Xvfb socket startup), so visual capture, normal audio playback and 60 FPS on ordinary hardware remain unverified locally. `visual_smoke.tscn` is ready for a graphical environment and captures menu/options/gameplay; no human playtest has occurred.
+
+This is a campaign **candidate**, not a release declaration. The principal gate—an unfamiliar human playing New Game through credits—remains open. Keep PR draft, no merge.
+
+## Automated gameplay outcome
+
+A normal-mechanics headless bot completed sectors 0–4 without HP overrides, teleport, forced kills, objective flags or resource grants: 77.57 simulated seconds, 0 deaths, 13 enemies defeated, 75 shots, 73 successful shots, 33 damage, 5 pickups. This validates mechanical reachability, not human difficulty: the bot aims precisely and uses the catalogs. The mandatory seeded rerun also passed: 80.68 simulated seconds, 0 deaths, 13 kills, 77 shots, 75 successful shots, 13 damage, 5 pickups. Production tests now cover 560 checks, including imported per-cell pixels. Pickups now use a separate collision layer: ray-interactable but do not block walking, enemy perception or projectiles. Earlier stalled simulations were retained in the scratch logs and corrected (door interaction threshold in the bot; solid pickup obstruction).

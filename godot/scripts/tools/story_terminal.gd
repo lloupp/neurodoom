@@ -20,7 +20,8 @@ func interact(_player: Node) -> void:
 	if used and one_shot:
 		return
 	used = true
-	print("\n=== ", display_name, " ===\n", log_text, "\n")
+	EventBus.message.emit(display_name + "\n" + log_text)
+	AudioDirector.play("terminal", "UI")
 	EventBus.log_event("story_terminal", {
 		"id": terminal_id,
 		"title": display_name,

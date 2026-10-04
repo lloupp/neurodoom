@@ -1,105 +1,204 @@
 class_name NeuroEnemy
 extends CharacterBody3D
 
+const SpriteController = preload("res://scripts/enemies/enemy_sprite_controller.gd")
+const Projectile = preload("res://scripts/systems/projectile.gd")
+const Catalog = preload("res://data/enemy_catalog.gd")
+enum State { IDLE, PATROL, ALERT, CHASE, ATTACK, RETREAT, DEAD }
 @export var enemy_kind := "heavy"
-@export var max_health := 80
-@export var speed := 2.1
-@export var contact_damage := 14
-@export var detection_range := 18.0
-@export var attack_range := 1.5
-
-const ENEMY_SHEETS := {
-	"drone": "res://art/runtime/enemies/drone_sheet.svg",
-	"heavy": "res://art/runtime/enemies/heavy_sheet.svg",
-	"ghost": "res://art/runtime/enemies/ghost_sheet.svg",
-	"turret": "res://art/runtime/enemies/turret_sheet.svg",
-	"boss": "res://art/runtime/enemies/boss_sheet.svg",
-	"spitter": "res://art/runtime/enemies/spitter_sheet.svg",
-	"brute": "res://art/runtime/enemies/brute_sheet.svg",
-	"wisp": "res://art/runtime/enemies/wisp_sheet.svg",
-	"stalker": "res://art/runtime/enemies/stalker_sheet.svg"
-}
-const FRAME_SIZE := Vector2(256, 320)
-
-var health := 80
+@export var max_health := 0
+@export var speed := -1.0
+@export var contact_damage := 0
+@export var detection_range := 20.0
+@export var attack_range := 0.0
+@export var patrol_points: Array[Vector3] = []
+var health := 0
 var attack_cooldown := 0.0
 var target: Node3D
-var sprite: Sprite3D
+var sprite: EnemySpriteController
+var state := State.IDLE
+var last_known := Vector3.ZERO
+var memory := 0.0
+var patrol_index := 0
+var telegraph := 0.0
+var attack_pending := false
+var aim := Vector3.ZERO
+var clock := 0.0
+var hit_reveal := 0.0
+var attacks := 0
+var stats: Dictionary
 
 func _ready() -> void:
+	stats = Catalog.DATA.get(enemy_kind, Catalog.DATA.heavy)
+	if max_health <= 0: max_health = int(stats.hp)
+	if speed < 0: speed = float(stats.speed)
+	if contact_damage <= 0: contact_damage = int(stats.damage)
+	if attack_range <= 0: attack_range = float(stats.range)
 	health = max_health
 	add_to_group("enemies")
-	_build_collision()
-	_build_sprite()
-	target = get_tree().get_first_node_in_group("player") as Node3D
-
-func _build_collision() -> void:
+	add_to_group("persistent")
 	var collision := CollisionShape3D.new()
 	var shape := CapsuleShape3D.new()
 	shape.radius = 0.42
-	shape.height = 1.75
+	shape.height = 1.8
 	collision.shape = shape
 	collision.position.y = 0.9
 	add_child(collision)
-
-func _build_sprite() -> void:
-	sprite = Sprite3D.new()
-	var sheet_path := str(ENEMY_SHEETS.get(enemy_kind, ENEMY_SHEETS["heavy"]))
-	var atlas := AtlasTexture.new()
-	atlas.atlas = load(sheet_path)
-	atlas.region = Rect2(Vector2.ZERO, FRAME_SIZE)
-	sprite.texture = atlas
-	sprite.position.y = 1.15
-	sprite.pixel_size = 0.0042
-	if enemy_kind == "boss":
-		sprite.pixel_size = 0.0056
-	elif enemy_kind in ["drone", "wisp"]:
-		sprite.pixel_size = 0.0037
-	sprite.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	sprite.alpha_cut = SpriteBase3D.ALPHA_CUT_DISCARD
-	sprite.shaded = true
+	sprite = SpriteController.new()
+	sprite.configure(enemy_kind, 1.4 if enemy_kind in ["boss", "brute"] else 1.0)
 	add_child(sprite)
+	EventBus.playtest_event.connect(_hear)
+
+func _hear(kind: String, payload: Dictionary) -> void:
+	if state == State.DEAD or kind not in ["shot_fired", "footstep"] or not payload.has("x"):
+		return
+	var point := Vector3(float(payload.x), global_position.y, float(payload.z))
+	if global_position.distance_to(point) < (24.0 if kind == "shot_fired" else 5.0):
+		last_known = point
+		memory = 4.0
+		state = State.ALERT
+
+func sees_player() -> bool:
+	if not is_instance_valid(target): return false
+	var origin := global_position + Vector3(0, 1.0, 0)
+	var query := PhysicsRayQueryParameters3D.create(origin, target.global_position + Vector3(0, 1.0, 0))
+	query.exclude = [get_rid()]
+	query.collision_mask = 1
+	var hit := get_world_3d().direct_space_state.intersect_ray(query)
+	return not hit.is_empty() and hit.collider == target
 
 func _physics_process(delta: float) -> void:
-	attack_cooldown = maxf(0.0, attack_cooldown - delta)
-	if not is_instance_valid(target):
-		target = get_tree().get_first_node_in_group("player") as Node3D
+	if state == State.DEAD:
+		if sprite.death_finished: queue_free()
 		return
-	var delta_to_player := target.global_position - global_position
-	var distance := delta_to_player.length()
-	if distance > detection_range:
-		velocity.x = 0
-		velocity.z = 0
-	elif distance > attack_range:
-		var dir := delta_to_player.normalized()
-		velocity.x = dir.x * speed
-		velocity.z = dir.z * speed
+	if GameState.completed: return
+	clock += delta
+	hit_reveal = maxf(0, hit_reveal - delta)
+	attack_cooldown = maxf(0, attack_cooldown - delta)
+	target = get_tree().get_first_node_in_group("player") as Node3D
+	if not is_instance_valid(target) or target.health <= 0: return
+	var offset := target.global_position - global_position
+	offset.y = 0
+	var distance := offset.length()
+	var visible := distance < detection_range and sees_player()
+	if visible and enemy_kind == "stalker" and distance < 6.0:
+		hit_reveal = 1.0
+	if visible:
+		last_known = target.global_position
+		memory = 4.0
 	else:
-		velocity.x = 0
-		velocity.z = 0
-		if attack_cooldown <= 0.0 and target.has_method("apply_damage"):
-			attack_cooldown = 1.0
-			target.apply_damage(contact_damage)
-	if not is_on_floor():
-		velocity.y -= 20.0 * delta
+		memory = maxf(0, memory - delta)
+	if attack_pending:
+		telegraph -= delta
+		sprite.set_state("attack")
+		if telegraph <= 0:
+			attack_pending = false
+			if visible:
+				_attack(distance)
+			attack_cooldown = float(stats.cooldown) * (0.65 if enemy_kind == "boss" and health < max_health / 2 else 1.0)
+	elif visible and distance <= attack_range and attack_cooldown <= 0:
+		state = State.ATTACK
+		attack_pending = true
+		aim = target.global_position + Vector3.UP
+		telegraph = 0.9 if enemy_kind == "boss" else (0.5 if enemy_kind == "brute" else 0.25)
+		AudioDirector.play("alert", "Enemies")
+		if enemy_kind == "boss":
+			EventBus.message.emit("WARDEN // " + ("SHOCKWAVE: BACK AWAY" if attacks % 2 == 1 else "VOLLEY: MOVE SIDEWAYS"))
+	var goal := last_known
+	var move_speed := speed
+	if attack_pending:
+		move_speed = 0
+	elif visible:
+		state = State.CHASE
+		if enemy_kind in ["spitter", "wisp"] and distance < 6.0:
+			state = State.RETREAT
+			goal = global_position - offset
+		elif enemy_kind in ["turret", "boss"] and distance <= attack_range:
+			move_speed = 0
+		elif distance < attack_range:
+			move_speed = 0
+	elif memory > 0:
+		state = State.ALERT
+		if global_position.distance_to(last_known) < 1.0: move_speed = 0
+	elif not patrol_points.is_empty():
+		state = State.PATROL
+		goal = patrol_points[patrol_index]
+		move_speed *= 0.55
+		if global_position.distance_to(goal) < 0.9:
+			patrol_index = (patrol_index + 1) % patrol_points.size()
 	else:
-		velocity.y = -0.1
+		state = State.IDLE
+		move_speed = 0
+	var direction := (goal - global_position)
+	direction.y = 0
+	direction = direction.normalized()
+	if enemy_kind in ["ghost", "wisp"] and visible:
+		direction = (direction + Vector3(direction.z, 0, -direction.x) * sin(clock * 2.0) * 0.7).normalized()
+	if move_speed > 0:
+		sprite.facing = direction
+		# Collision and steering around local obstacles. No wall phasing.
+		var query := PhysicsRayQueryParameters3D.create(global_position + Vector3.UP, global_position + Vector3.UP + direction * 1.2)
+		query.exclude = [get_rid()]
+		if not get_world_3d().direct_space_state.intersect_ray(query).is_empty():
+			direction = Vector3(direction.z, 0, -direction.x) * (1.0 if int(clock) % 6 < 3 else -1.0)
+	velocity.x = direction.x * move_speed
+	velocity.z = direction.z * move_speed
+	velocity.y = -0.1 if is_on_floor() else velocity.y - 20.0 * delta
 	move_and_slide()
+	sprite.opacity = 0.48 if enemy_kind == "ghost" else (0.18 if enemy_kind == "stalker" and state not in [State.ATTACK] and hit_reveal <= 0 else 1.0)
+	if enemy_kind == "wisp": sprite.base_y = 1.35 + sin(clock * 2) * 0.18
+	if not attack_pending: sprite.set_state("walk" if move_speed > 0 else "idle")
+
+func _attack(distance: float) -> void:
+	attacks += 1
+	if enemy_kind == "boss" and attacks % 2 == 0:
+		# Deliberately short-range shockwave; cover also blocks it via LOS above.
+		if distance < 6.0: target.apply_damage(contact_damage)
+		NeuroImpact.spawn(get_tree().current_scene, global_position + Vector3.UP, Color("#ed2d74"), true)
+	elif str(stats.behavior) in ["ranged", "boss"]:
+		var count := 3 if enemy_kind in ["wisp", "boss"] else 1
+		for i in count:
+			var projectile := Projectile.new()
+			projectile.shooter = self
+			projectile.hostile = true
+			projectile.damage = contact_damage
+			projectile.speed = 10.0 if enemy_kind == "spitter" else 14.0
+			projectile.tint = Color("#87e842") if enemy_kind == "spitter" else Color("#ed2d74")
+			projectile.direction = (aim - (global_position + Vector3.UP)).normalized().rotated(Vector3.UP, (i - (count - 1) * 0.5) * 0.12)
+			get_tree().current_scene.add_child(projectile)
+			projectile.global_position = global_position + Vector3.UP + projectile.direction * 0.65
+	elif distance <= attack_range:
+		target.apply_damage(contact_damage)
 
 func apply_damage(amount: int, _hit_position: Vector3 = Vector3.ZERO) -> void:
-	if health <= 0:
-		return
-	health -= amount
-	sprite.modulate = Color(2.0, 0.7, 0.7, 1.0)
-	create_tween().tween_property(sprite, "modulate", Color.WHITE, 0.1)
-	if health <= 0:
-		_die()
+	if state == State.DEAD or amount <= 0: return
+	health = maxi(0, health - maxi(1, int(amount * float(stats.armor))))
+	hit_reveal = 2.0
+	sprite.set_state("hit")
+	AudioDirector.play("impact", "Enemies")
+	if health <= 0: _die()
 
 func _die() -> void:
-	EventBus.enemy_killed.emit(enemy_kind)
-	EventBus.log_event("enemy_killed", {"kind": enemy_kind, "x": position.x, "z": position.z})
+	state = State.DEAD
+	velocity = Vector3.ZERO
+	attack_pending = false
 	collision_layer = 0
 	collision_mask = 0
-	var tween := create_tween()
-	tween.tween_property(sprite, "modulate:a", 0.0, 0.35)
-	tween.tween_callback(queue_free)
+	sprite.opacity = 1.0
+	sprite.set_state("death")
+	GameState.defeated[str(name)] = true
+	EventBus.enemy_killed.emit(enemy_kind)
+	EventBus.log_event("enemy_killed", {"kind":enemy_kind,"id":str(name),"x":position.x,"z":position.z})
+
+func save_snapshot() -> Dictionary:
+	return {"kind":"enemy", "hp":health, "position":[position.x,position.y,position.z], "dead":state == State.DEAD}
+
+func apply_snapshot(data: Dictionary) -> void:
+	health = int(data.hp)
+	var point: Array = data.position
+	position = Vector3(float(point[0]),float(point[1]),float(point[2]))
+	if bool(data.dead):
+		state = State.DEAD
+		collision_layer = 0
+		collision_mask = 0
+		sprite.set_state("death")

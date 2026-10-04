@@ -3,10 +3,12 @@ config_version=5
 
 [application]
 config/name="NEURODOOM"
-run/main_scene="res://scenes/main.tscn"
+run/main_scene="res://scenes/menu.tscn"
 config/features=PackedStringArray("4.7")
 
 [autoload]
+AudioDirector="*res://scripts/autoload/audio_director.gd"
+Settings="*res://scripts/autoload/settings.gd"
 EventBus="*res://scripts/autoload/event_bus.gd"
 GameState="*res://scripts/autoload/game_state.gd"
 PlaytestRecorder="*res://scripts/systems/playtest_recorder.gd"

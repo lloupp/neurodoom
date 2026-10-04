@@ -12,3 +12,7 @@ signal playtest_event(kind: String, payload: Dictionary)
 
 func log_event(kind: String, payload: Dictionary = {}) -> void:
 	playtest_event.emit(kind, payload)
+
+signal message(text: String)
+signal hit_confirmed
+signal player_died

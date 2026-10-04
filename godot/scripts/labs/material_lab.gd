@@ -10,12 +10,14 @@ var swatches := [
 
 func _ready() -> void:
 	var env_node := WorldEnvironment.new()
+	env_node.add_to_group("material_environment")
 	var env := Environment.new()
 	env.background_mode = Environment.BG_COLOR
 	env.background_color = Color("#06080c")
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = Color("#222936")
 	env.ambient_light_energy = 0.75
+	env.fog_density = 0.025
 	env_node.environment = env
 	add_child(env_node)
 
@@ -47,6 +49,7 @@ func _ready() -> void:
 		add_child(mesh_i)
 
 	var light := OmniLight3D.new()
+	light.add_to_group("material_light")
 	light.position = Vector3(0, 5, 3)
 	light.light_color = Color("#f2e3c6")
 	light.light_energy = 5.0
@@ -59,3 +62,12 @@ func _ready() -> void:
 	camera.look_at_from_position(camera.position, Vector3(0, 1, -1))
 	camera.current = true
 	add_child(camera)
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_F:
+			var environment_node := get_tree().get_first_node_in_group("material_environment") as WorldEnvironment
+			environment_node.environment.fog_enabled = not environment_node.environment.fog_enabled
+		if event.keycode == KEY_L:
+			var light_node := get_tree().get_first_node_in_group("material_light") as OmniLight3D
+			light_node.light_energy = 1.0 if light_node.light_energy > 1.0 else 5.0

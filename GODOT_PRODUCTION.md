@@ -35,7 +35,10 @@ Controls:
 - Left mouse: fire
 - E: interact
 - Shift: sprint
-- Esc: release/capture mouse
+- Esc: pause/resume
+- 1–4: select weapon
+- R: reload
+- TAB: inventory summary
 - F5: quick-save
 - F9: quick-load
 
@@ -52,3 +55,7 @@ See `godot/art/STYLE_GUIDE.md`.
 ## Migration rule
 
 Nothing under `src/` is removed or replaced. The browser version remains available as a mechanics reference while the Godot production track grows.
+
+## Campaign candidate update
+
+The main scene now opens a New Game / Continue / Options / Quit menu. New Game runs five connected sectors and a Warden confrontation ending in credits and menu return. The original slice remains `godot/scenes/main.tscn`, independently smoke-tested. See `godot/docs/PRODUCTION_AUDIT.md` for implemented systems, known production gaps, save migration, debug traversal boundaries and mandatory human playtest. Keep PR #10 draft; no release claim or merge.

@@ -15,12 +15,15 @@ var magenta := Color("#ed2d74")
 var amber := Color("#d98a32")
 
 func _ready() -> void:
-	GameState.reset_run()
+	if GameState.pending.is_empty():
+		GameState.campaign_mode = false
+		GameState.reset_run()
 	_build_environment()
 	_build_level()
 	_spawn_player()
 	_spawn_hud()
 	_spawn_enemies()
+	GameState.apply_pending()
 	EventBus.log_event("vertical_slice_ready")
 
 func _build_environment() -> void:
@@ -113,6 +116,9 @@ func _spawn_hud() -> void:
 	hud.name = "HUD"
 	hud.set_script(HUDScript)
 	add_child(hud)
+	var pause_menu := CanvasLayer.new()
+	pause_menu.set_script(preload("res://scripts/ui/pause_menu.gd"))
+	add_child(pause_menu)
 
 func _spawn_enemies() -> void:
 	for pos in [Vector3(0, 0.1, 0.5), Vector3(5.8, 0.1, -1.4), Vector3(-4.8, 0.1, -3.1)]:

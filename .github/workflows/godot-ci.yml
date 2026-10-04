@@ -29,19 +29,25 @@ jobs:
         with:
           version: 4.7.2
           use-dotnet: false
-          include-templates: false
+          include-templates: true
 
-      - name: Import project
-        run: godot --headless --path godot --import
+      - name: Godot production gates (fail on diagnostic errors)
+        run: python3 godot/tools/run_checks.py
 
-      - name: Smoke vertical slice
-        run: godot --headless --path godot --scene res://scenes/main.tscn --quit-after 8
+      - name: Export Windows and Linux test builds
+        run: python3 godot/tools/run_checks.py --export
 
-      - name: Smoke enemy lab
-        run: godot --headless --path godot --scene res://scenes/labs/enemy_lab.tscn --quit-after 4
+      - name: Smoke exported Linux binary
+        run: |
+          chmod +x godot/export/neurodoom-linux.x86_64
+          godot/export/neurodoom-linux.x86_64 --headless --quit-after 120 2>&1 | tee /tmp/export-smoke.log
+          ! grep -E 'SCRIPT ERROR|ERROR:|WARNING:' /tmp/export-smoke.log
 
-      - name: Smoke weapon lab
-        run: godot --headless --path godot --scene res://scenes/labs/weapon_lab.tscn --quit-after 4
-
-      - name: Smoke material lab
-        run: godot --headless --path godot --scene res://scenes/labs/material_lab.tscn --quit-after 4
+      - name: Upload desktop builds
+        uses: actions/upload-artifact@v4
+        with:
+          name: neurodoom-desktop-test-${{ github.sha }}
+          path: |
+            godot/export/neurodoom-windows.exe
+            godot/export/neurodoom-linux.x86_64
+          if-no-files-found: error

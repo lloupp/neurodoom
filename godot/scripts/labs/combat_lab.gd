@@ -124,7 +124,9 @@ func _build_inspector() -> void:
 	add_child(layer)
 	inspector = PanelContainer.new()
 	inspector.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	inspector.position = Vector2(-340,80)
+	inspector.offset_left = -340
+	inspector.offset_top = 80
+	inspector.offset_right = -16
 	layer.add_child(inspector)
 	var box := VBoxContainer.new()
 	inspector.add_child(box)

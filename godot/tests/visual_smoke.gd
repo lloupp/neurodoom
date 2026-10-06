@@ -11,6 +11,18 @@ func _capture(name_value: String) -> void:
 	var picture := get_viewport().get_texture().get_image()
 	picture.save_png(directory.path_join(name_value + ".png"))
 
+func _check_game_layout() -> void:
+	var bounds := get_viewport().get_visible_rect()
+	var hud: NeuroHUD = get_tree().current_scene.find_children("*","NeuroHUD",true,false)[0]
+	for control in [hud.hp_label,hud.ammo_label,hud.crosshair]:
+		if not bounds.encloses(control.get_global_rect()):
+			printerr("TEST FAIL: visible HUD outside viewport")
+			get_tree().quit(1)
+	var model: WeaponViewModel = GameState.player.find_children("*","WeaponViewModel",true,false)[0]
+	if not bounds.intersects(model.rect.get_global_rect()):
+		printerr("TEST FAIL: weapon outside viewport")
+		get_tree().quit(1)
+
 func _run() -> void:
 	get_tree().current_scene = null
 	get_tree().change_scene_to_file("res://scenes/menu.tscn")
@@ -22,6 +34,7 @@ func _run() -> void:
 	await _capture("controls")
 	GameState.new_game()
 	await _capture("level1")
+	_check_game_layout()
 	GameState.player.unlocked.append("shotgun")
 	GameState.player.select_weapon("shotgun")
 	await _capture("shotgun")

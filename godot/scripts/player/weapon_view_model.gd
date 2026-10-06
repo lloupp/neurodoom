@@ -20,7 +20,8 @@ func _ready() -> void:
 	rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	rect.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
-	rect.position = Vector2(-620, -380)
+	rect.offset_left = -620
+	rect.offset_top = -380
 	rect.size = Vector2(620, 380)
 	add_child(rect)
 	flash = TextureRect.new()
@@ -30,7 +31,8 @@ func _ready() -> void:
 	flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	flash.modulate = Color(1, 1, 1, 0)
 	flash.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
-	flash.position = Vector2(-162, -302)
+	flash.offset_left = -162
+	flash.offset_top = -302
 	flash.size = Vector2(96, 96)
 	add_child(flash)
 	for id in NeuroWeapons.ORDER:
@@ -59,5 +61,9 @@ func _process(delta: float) -> void:
 	kick = move_toward(kick, 0, delta * 95)
 	sway = sway.lerp(Vector2.ZERO, minf(1, delta * 10))
 	var bob := sin(Time.get_ticks_msec() * 0.009) * 5.0 * movement if motion_enabled else 0.0
-	rect.position = Vector2(-620, -380 + kick + bob) + (sway if motion_enabled else Vector2.ZERO)
+	var origin := Vector2(-620, -380 + kick + bob) + (sway if motion_enabled else Vector2.ZERO)
+	rect.offset_left = origin.x
+	rect.offset_top = origin.y
+	rect.offset_right = origin.x + 620
+	rect.offset_bottom = origin.y + 380
 	flash.modulate.a = 0.9 if state == "fire" else 0

@@ -31,6 +31,8 @@ Art/audio are samples and placeholders; do not label them final. The generated p
 - Invalid JSON parsing originally emitted engine errors even though the save was rejected. The save reader now uses the parser's return status and reports a recoverable UI error instead of engine diagnostics.
 - Quick Load prefers the manual slot, falling back to Continue selection when unavailable. Continue chooses the latest primary valid save. Recovery options never silently rewrite files.
 
+- Graphical capture review exposed off-screen HUD, weapon and lab controls caused by absolute positions after anchor presets. These now use anchor-relative offsets, with viewport-bound regression checks.
+
 ## Remaining release gates
 
 An unfamiliar human completing the campaign, actual audio listening, Windows execution, ordinary hardware performance, graphical editor usability and final art direction sign-off remain open. Graphical CI uses software rendering and a dummy audio driver; its screenshots are layout evidence, not human gameplay or audio validation.

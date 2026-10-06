@@ -56,6 +56,12 @@ func _run() -> void:
 	await get_tree().process_frame
 	var hud := get_tree().current_scene.find_children("*","NeuroHUD",true,false)
 	check(not hud.is_empty() and float(hud[0].vignette.material.get_shader_parameter("intensity")) > 0.5,"damage vignette shows on hit")
+	var viewport_rect := get_viewport().get_visible_rect()
+	for control in [hud[0].hp_label,hud[0].ammo_label,hud[0].crosshair]:
+		check(viewport_rect.encloses(control.get_global_rect()),"essential HUD stays inside viewport: " + control.text)
+	check(hud[0].crosshair.get_global_rect().get_center().distance_to(viewport_rect.get_center()) < 8,"crosshair centered")
+	var view_model: WeaponViewModel = player.find_children("*","WeaponViewModel",true,false)[0]
+	check(viewport_rect.intersects(view_model.rect.get_global_rect()),"weapon model visible in viewport")
 	player.heal(50)
 	check(player.health == 100,"heal capped")
 	var start_position: Vector3 = player.position

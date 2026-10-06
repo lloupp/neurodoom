@@ -4,6 +4,7 @@ extends CanvasLayer
 const Factory = preload("res://scripts/ui/menu_factory.gd")
 var root: Control
 var objective_label: Label
+var crosshair: Label
 var hp_label: Label
 var ammo_label: Label
 var prompt_label: Label
@@ -47,6 +48,14 @@ func label(text: String,pos: Vector2,size_value := Vector2(800,40),font_size := 
 	root.add_child(item)
 	return item
 
+func anchored(item: Control, preset: int, origin: Vector2) -> void:
+	item.set_anchors_preset(preset)
+	var dimensions := item.size
+	item.offset_left = origin.x
+	item.offset_top = origin.y
+	item.offset_right = origin.x + dimensions.x
+	item.offset_bottom = origin.y + dimensions.y
+
 func _ready() -> void:
 	layer = 10
 	root = Control.new()
@@ -67,11 +76,8 @@ func _ready() -> void:
 	objective_label = label(GameState.current_objective,Vector2(24,22),Vector2(1000,65),18)
 	objective_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	hp_label = label("",Vector2(24,0))
-	hp_label.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	hp_label.position = Vector2(24,-50)
+	anchored(hp_label,Control.PRESET_BOTTOM_LEFT,Vector2(24,-50))
 	stamina_bar = ProgressBar.new()
-	stamina_bar.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	stamina_bar.position = Vector2(24,-14)
 	stamina_bar.size = Vector2(180,6)
 	stamina_bar.show_percentage = false
 	stamina_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -79,24 +85,20 @@ func _ready() -> void:
 	stamina_fill.bg_color = Color("#32d6e8")
 	stamina_bar.add_theme_stylebox_override("fill",stamina_fill)
 	root.add_child(stamina_bar)
+	anchored(stamina_bar,Control.PRESET_BOTTOM_LEFT,Vector2(24,-14))
 	shadow_label = label("IN SHADOW",Vector2.ZERO,Vector2(200,24),14)
-	shadow_label.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	shadow_label.position = Vector2(24,-76)
+	anchored(shadow_label,Control.PRESET_BOTTOM_LEFT,Vector2(24,-76))
 	shadow_label.add_theme_color_override("font_color",Color("#7d8fa0"))
 	shadow_label.hide()
 	ammo_label = label("",Vector2.ZERO,Vector2(330,40))
-	ammo_label.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	ammo_label.position = Vector2(-345,-50)
+	anchored(ammo_label,Control.PRESET_BOTTOM_RIGHT,Vector2(-345,-50))
 	prompt_label = label("",Vector2.ZERO,Vector2(620,60),18)
-	prompt_label.set_anchors_preset(Control.PRESET_CENTER)
-	prompt_label.position = Vector2(-310,120)
+	anchored(prompt_label,Control.PRESET_CENTER,Vector2(-310,120))
 	prompt_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	var crosshair := label("+",Vector2.ZERO,Vector2(24,32),26)
-	crosshair.set_anchors_preset(Control.PRESET_CENTER)
-	crosshair.position = Vector2(-10,-18)
+	crosshair = label("+",Vector2.ZERO,Vector2(24,32),26)
+	anchored(crosshair,Control.PRESET_CENTER,Vector2(-10,-18))
 	hit_label = label("×",Vector2.ZERO,Vector2(30,30),32)
-	hit_label.set_anchors_preset(Control.PRESET_CENTER)
-	hit_label.position = Vector2(-12,-20)
+	anchored(hit_label,Control.PRESET_CENTER,Vector2(-12,-20))
 	hit_label.hide()
 	message_label = label("",Vector2(24,95),Vector2(900,140),18)
 	message_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -104,12 +106,9 @@ func _ready() -> void:
 	narrative_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	EventBus.narrative.connect(func(text: String): narrative_label.text = text; narrative_time = 12.0)
 	boss_label = label("",Vector2.ZERO,Vector2(700,40))
-	boss_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	boss_label.position = Vector2(-350,165)
+	anchored(boss_label,Control.PRESET_CENTER_TOP,Vector2(-350,165))
 	boss_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	boss_bar = ProgressBar.new()
-	boss_bar.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	boss_bar.position = Vector2(-210, 208)
 	boss_bar.size = Vector2(420, 14)
 	boss_bar.show_percentage = false
 	boss_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -117,6 +116,7 @@ func _ready() -> void:
 	fill.bg_color = Color("#ed2d74")
 	boss_bar.add_theme_stylebox_override("fill", fill)
 	root.add_child(boss_bar)
+	anchored(boss_bar,Control.PRESET_CENTER_TOP,Vector2(-210,208))
 	EventBus.objective_changed.connect(func(text: String): objective_label.text = "OBJECTIVE // " + text)
 	EventBus.player_damaged.connect(_health)
 	EventBus.ammo_changed.connect(_ammo)

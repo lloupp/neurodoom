@@ -11,6 +11,7 @@ var message_label: Label
 var hit_label: Label
 var boss_label: Label
 var boss_bar: ProgressBar
+var stamina_bar: ProgressBar
 var vignette: ColorRect
 var message_time := 0.0
 var hit_time := 0.0
@@ -63,6 +64,16 @@ func _ready() -> void:
 	hp_label = label("",Vector2(24,0))
 	hp_label.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
 	hp_label.position = Vector2(24,-50)
+	stamina_bar = ProgressBar.new()
+	stamina_bar.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	stamina_bar.position = Vector2(24,-14)
+	stamina_bar.size = Vector2(180,6)
+	stamina_bar.show_percentage = false
+	stamina_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var stamina_fill := StyleBoxFlat.new()
+	stamina_fill.bg_color = Color("#32d6e8")
+	stamina_bar.add_theme_stylebox_override("fill",stamina_fill)
+	root.add_child(stamina_bar)
 	ammo_label = label("",Vector2.ZERO,Vector2(330,40))
 	ammo_label.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
 	ammo_label.position = Vector2(-345,-50)
@@ -125,6 +136,10 @@ func _process(delta: float) -> void:
 	var low := 0.0
 	if previous_hp > 0 and previous_hp <= 30: low = 0.35 + 0.15 * sin(Time.get_ticks_msec() * 0.006)
 	vignette.material.set_shader_parameter("intensity",maxf(damage_pulse,low))
+	if is_instance_valid(GameState.player):
+		stamina_bar.value = 100.0 * GameState.player.stamina / GameState.player.max_stamina
+		# Hidden when full to keep the HUD clean.
+		stamina_bar.visible = stamina_bar.value < 99.5
 	boss_label.text = ""
 	boss_bar.hide()
 	for enemy in get_tree().get_nodes_in_group("enemies"):

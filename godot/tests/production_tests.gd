@@ -45,6 +45,11 @@ func _run() -> void:
 		check(Save.read_save("user://test_slot.json") == JSON.parse_string(JSON.stringify(full,"",true,true)),"invalid write preserves slot")
 	var legacy := {"version":1,"player":{"position":[0,1,8],"health":100,"ammo":4,"reserve_ammo":20,"yaw":0,"pitch":0},"power_restored":true,"door_open":false,"completed":false,"objective":"legacy"}
 	check(Save.validate(Save.migrate(legacy)),"explicit v1 migration")
+	Settings.values.difficulty = 2
+	player.apply_damage(20)
+	check(player.health == 70,"hard difficulty scales damage taken")
+	player.heal(100)
+	Settings.values.difficulty = 1
 	player.apply_damage(20)
 	check(player.health == 80,"damage")
 	await get_tree().process_frame
@@ -52,6 +57,21 @@ func _run() -> void:
 	check(not hud.is_empty() and float(hud[0].vignette.material.get_shader_parameter("intensity")) > 0.5,"damage vignette shows on hit")
 	player.heal(50)
 	check(player.health == 100,"heal capped")
+	var start_position: Vector3 = player.position
+	Input.action_press("sprint")
+	Input.action_press("move_forward")
+	player._physics_process(1.0)
+	check(is_equal_approx(player.stamina,100.0-35.0),"sprint drains stamina")
+	player.stamina = 0.5
+	player._physics_process(0.1)
+	check(player.stamina > 0.5,"exhausted sprint does not drain, it regenerates")
+	Input.action_release("sprint")
+	Input.action_release("move_forward")
+	player._physics_process(1.0)
+	check(player.stamina >= 30.0,"stamina regenerates")
+	player.stamina = player.max_stamina
+	player.position = start_position
+	player.velocity = Vector3.ZERO
 	var pickup := NeuroPickup.new()
 	pickup.name = "test_card"
 	pickup.pickup_type = "keycard"

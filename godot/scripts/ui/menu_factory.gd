@@ -52,12 +52,19 @@ static func options(parent: Node,back: Callable) -> void:
 		check.button_pressed = Settings.values[key]
 		check.toggled.connect(func(value: bool): Settings.values[key] = value; Settings.apply())
 		box.add_child(check)
-	for pair in [["resolution",["1280 × 720","1600 × 900","1920 × 1080"]],["quality",["Low","Medium","High (shadows)"]]]:
+	for pair in [["resolution",["1280 × 720","1600 × 900","1920 × 1080"]],["quality",["Low","Medium","High (shadows)"]],["difficulty",["Easy","Normal","Hard"]]]:
+		var select_row := HBoxContainer.new()
+		box.add_child(select_row)
+		var select_label := Label.new()
+		select_label.text = str(pair[0]).to_upper()
+		select_label.custom_minimum_size.x = 220
+		select_row.add_child(select_label)
 		var select := OptionButton.new()
 		for title in pair[1]: select.add_item(title)
 		select.selected = clampi(Settings.values[pair[0]],0,2)
 		select.item_selected.connect(func(value: int): Settings.values[pair[0]] = value; Settings.apply())
-		box.add_child(select)
+		select.custom_minimum_size.x = 300
+		select_row.add_child(select)
 	button(box,"CONTROLS",func(): _reset(parent); controls(parent,func(): _reset(parent); options(parent,back)))
 	button(box,"BACK",back)
 

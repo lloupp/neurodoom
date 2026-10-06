@@ -7,6 +7,10 @@ const Projectile = preload("res://scripts/systems/projectile.gd")
 const INTERACT_DISTANCE := 3.2
 var health := 100
 var max_health := 100
+const STAMINA_DRAIN := 35.0
+const STAMINA_REGEN := 30.0
+var stamina := 100.0
+var max_stamina := 100.0
 var weapon := "pistol"
 var weapon_tuning: Dictionary = {}
 var magazines := Weapons.magazines()
@@ -94,7 +98,9 @@ func _physics_process(delta: float) -> void:
 	if firing and Input.is_action_pressed("fire") and bool(_weapon_data().automatic) and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED: _fire()
 	var input := Input.get_vector("move_left","move_right","move_forward","move_back")
 	var move_dir := global_transform.basis * Vector3(input.x,0,input.y)
-	var move_speed := 7.5 if Input.is_action_pressed("sprint") else 5.0
+	var sprinting := Input.is_action_pressed("sprint") and input != Vector2.ZERO and stamina > 1.0
+	stamina = maxf(0.0,stamina-STAMINA_DRAIN*delta) if sprinting else minf(max_stamina,stamina+STAMINA_REGEN*delta)
+	var move_speed := 7.5 if sprinting else 5.0
 	velocity.x = move_toward(velocity.x,move_dir.x*move_speed,delta*25)
 	velocity.z = move_toward(velocity.z,move_dir.z*move_speed,delta*25)
 	velocity.y = -0.1 if is_on_floor() else velocity.y - 20*delta
@@ -194,7 +200,7 @@ func _fire() -> void:
 
 func apply_damage(amount: int) -> void:
 	if health <= 0 or amount <= 0 or GameState.completed: return
-	health = maxi(0,health-amount)
+	health = maxi(0,health-maxi(1,roundi(amount*float(Settings.DAMAGE_TAKEN[Settings.values.difficulty]))))
 	damage_flash = 0.3
 	refresh_hud()
 	EventBus.log_event("player_damaged",{"amount":amount,"hp":health})

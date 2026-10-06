@@ -1,7 +1,9 @@
 extends Node
 
 const PATH := "user://neurodoom_settings.cfg"
-var values := {"master":0.8,"music":0.6,"sfx":0.8,"sensitivity":0.0022,"fov":78.0,"fullscreen":false,"resolution":0,"quality":1,"motion":true,"shake":true,"subtitles":true}
+var values := {"master":0.8,"music":0.6,"sfx":0.8,"sensitivity":0.0022,"fov":78.0,"fullscreen":false,"resolution":0,"quality":1,"motion":true,"shake":true,"subtitles":true,"difficulty":1}
+# Damage taken multiplier per difficulty (web reference DIFFICULTY_DAMAGE_TAKEN).
+const DAMAGE_TAKEN := [0.6, 1.0, 1.5]
 
 # Physical keys keep the WASD layout on AZERTY/QWERTZ keyboards.
 const BINDINGS := {"move_forward":KEY_W,"move_back":KEY_S,"move_left":KEY_A,"move_right":KEY_D,"sprint":KEY_SHIFT,"interact":KEY_E,"reload":KEY_R,"weapon_1":KEY_1,"weapon_2":KEY_2,"weapon_3":KEY_3,"weapon_4":KEY_4,"inventory":KEY_TAB,"quick_save":KEY_F5,"quick_load":KEY_F9}
@@ -28,6 +30,7 @@ func _ready() -> void:
 			if typeof(code) == TYPE_INT and code > 0: _bind(action, code)
 	values.sensitivity = clampf(values.sensitivity, 0.0005, 0.006)
 	values.fov = clampf(values.fov, 60, 110)
+	values.difficulty = clampi(values.difficulty, 0, 2)
 	apply()
 
 func apply() -> void:

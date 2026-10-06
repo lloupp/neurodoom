@@ -73,3 +73,25 @@ static func scorch(parent: Node, point: Vector3, normal: Vector3, size := 0.35) 
 	var side := up.cross(Vector3.FORWARD if absf(up.dot(Vector3.FORWARD)) < 0.9 else Vector3.RIGHT).normalized()
 	decal.global_transform = Transform3D(Basis(side, up, side.cross(up)), point)
 	return decal
+
+# Hitscan tracer: the horizontal bolt art stretched along the shot, turned to face the viewer.
+static func tracer(parent: Node, from: Vector3, to: Vector3, viewer: Vector3) -> Sprite3D:
+	var along := to - from
+	if along.length() < 0.5: return null
+	var visual := Sprite3D.new()
+	visual.texture = texture("bolt")
+	visual.shaded = false
+	visual.transparent = true
+	visual.pixel_size = 0.002
+	parent.add_child(visual)
+	var x := along.normalized()
+	var middle := from + along * 0.5
+	var facing := (viewer - middle)
+	facing = (facing - x * facing.dot(x)).normalized()
+	if facing.length() < 0.01: facing = x.cross(Vector3.UP).normalized()
+	var length_scale := along.length() / (REGIONS.bolt.size.x * visual.pixel_size)
+	visual.global_transform = Transform3D(Basis(x * length_scale, facing.cross(x), facing), middle)
+	var tween := visual.create_tween()
+	tween.tween_property(visual, "modulate:a", 0.0, 0.07)
+	tween.tween_callback(visual.queue_free)
+	return visual

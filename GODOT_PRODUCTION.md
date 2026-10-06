@@ -38,7 +38,7 @@ Controls:
 - Esc: pause/resume (controls are InputMap actions on physical keys; AZERTY keeps WASD positions)
 - 1–4: select weapon
 - R: reload
-- TAB: inventory summary
+- TAB: inventory (pauses; read recovered logs)
 - F5: quick-save
 - F9: quick-load
 

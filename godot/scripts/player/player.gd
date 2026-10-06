@@ -192,6 +192,8 @@ func _fire() -> void:
 			var hit := _trace(float(data.range),float(data.spread))
 			if hit.is_empty(): continue
 			var hostile: bool = hit.collider.is_in_group("enemies")
+			# One tracer per shot (not per pellet) keeps the shotgun readable.
+			if i == 0: NeuroImpact.tracer(get_tree().current_scene,camera.global_position+camera.global_transform.basis * Vector3(0.18,-0.16,-0.4),hit.position,camera.global_position)
 			NeuroImpact.spawn(get_tree().current_scene,hit.position,"energy" if hostile else "spark")
 			if not hostile: NeuroImpact.scorch(get_tree().current_scene,hit.position,hit.normal)
 			if hit.collider.has_method("apply_damage"):

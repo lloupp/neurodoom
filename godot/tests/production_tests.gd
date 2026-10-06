@@ -192,6 +192,9 @@ func _catalogs() -> void:
 	check(first.global_transform.basis.y.is_equal_approx(Vector3.BACK),"scorch faces surface normal")
 	for i in NeuroImpact.MAX_SCORCH + 5: NeuroImpact.scorch(decal_root,Vector3(i,0,0),Vector3.UP)
 	check(decal_root.get_child_count() == NeuroImpact.MAX_SCORCH,"scorch decal pool bounded")
+	var streak := NeuroImpact.tracer(decal_root,Vector3.ZERO,Vector3(0,0,-10),Vector3(0,2,-5))
+	check(streak.global_transform.basis.x.normalized().is_equal_approx(Vector3.FORWARD) and absf(streak.global_transform.basis.x.length() * streak.pixel_size * NeuroImpact.REGIONS.bolt.size.x - 10.0) < 0.01,"tracer spans the shot")
+	check(NeuroImpact.tracer(decal_root,Vector3.ZERO,Vector3(0,0,-0.1),Vector3.UP) == null,"no tracer for point-blank")
 	decal_root.free()
 	for action in Settings.BINDINGS.keys() + ["fire"]:
 		check(InputMap.has_action(action) and not InputMap.action_get_events(action).is_empty(),"input action bound " + action)

@@ -61,3 +61,7 @@ A normal-mechanics headless bot completed sectors 0–4 without HP overrides, te
 - Options → CONTROLS: per-action rebinding (click, press key; Esc cancels), conflicting key is swapped so no action is left unbound, RESET DEFAULTS, persisted in `neurodoom_settings.cfg` `[bindings]`.
 - Scorch decals (darkened fx spark, ImageTexture because decals use the renderer atlas) on hitscan wall hits and rocket blasts; pool of 32, oldest recycled.
 - Damage feedback: full-screen red tint replaced by an edge-only shader vignette; persistent slow pulse at HP ≤ 30. Headless uses a dummy renderer, so shader appearance is unverified until a graphical run.
+- Sprint stamina from web reference (drain 35/s, regen 30/s, no sprint below 1); thin HUD bar hidden when full. Not saved (transient).
+- Difficulty Easy/Normal/Hard in Options scales damage taken 0.6/1.0/1.5 (web `DIFFICULTY_DAMAGE_TAKEN`). Rocket self-damage is scaled too.
+- TAB inventory panel: pauses, lists HP, credits, cards, per-weapon ammo and recovered logs; logs are re-readable (text resolved from campaign data by level id). Esc/TAB close.
+- Hitscan tracer using the `bolt` fx region, stretched along the shot and turned toward the camera, 70 ms. One tracer per shot, including shotgun.

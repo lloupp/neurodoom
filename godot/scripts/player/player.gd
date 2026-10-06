@@ -4,6 +4,7 @@ extends CharacterBody3D
 const Weapons = preload("res://data/weapon_catalog.gd")
 const ViewModel = preload("res://scripts/player/weapon_view_model.gd")
 const Projectile = preload("res://scripts/systems/projectile.gd")
+const InventoryPanel = preload("res://scripts/ui/inventory_panel.gd")
 const INTERACT_DISTANCE := 3.2
 var health := 100
 var max_health := 100
@@ -56,6 +57,9 @@ func _ready() -> void:
 	view_model = ViewModel.new()
 	add_child(view_model)
 	view_model.select(weapon)
+	var inventory_panel := InventoryPanel.new()
+	inventory_panel.player = self
+	add_child(inventory_panel)
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	refresh_hud()
 
@@ -77,7 +81,6 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action("reload"): reload_weapon()
 	elif event.is_action("quick_save"): GameState.save_game()
 	elif event.is_action("quick_load"): GameState.load_game()
-	elif event.is_action("inventory"): EventBus.message.emit("KEYS %s // CREDITS %d // LOGS %s" % [str(keycards),credits,str(inventory)])
 	else:
 		for i in Weapons.ORDER.size():
 			if event.is_action("weapon_%d" % (i + 1)): select_weapon(Weapons.ORDER[i])

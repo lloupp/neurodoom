@@ -11,14 +11,32 @@ func _ready() -> void:
 		if GameState.door_open: call_deferred("_open")
 
 func get_interaction_prompt() -> String:
-	if role == "T": return "Neural relay // power online" if GameState.power_restored else "E  Breach neural relay // authorize sector power"
-	if role == "X": return "E  Exit sector" if GameState.can_exit() else "EXIT LOCKED // terminal, card, containment"
+	if role == "Z": return Settings.prompt("interact","Bridge auxiliary power using sector card") if not GameState.power_restored else "AUXILIARY POWER ONLINE"
+	if role == "T" and GameState.campaign_mode and not GameState.power_restored:
+		var mechanism: String = NeuroCampaign.LEVELS[GameState.level].relay
+		if mechanism == "valve": return Settings.prompt("interact","Close root isolation valve")
+		if mechanism == "containment": return "LIFT LOCKED // neutralize Atlas" if GameState.living_kinds().has("brute") else Settings.prompt("interact","Route containment lift")
+	if role == "T": return "Neural relay // power online" if GameState.power_restored else Settings.prompt("interact","Breach neural relay // authorize sector power")
+	if role == "X": return Settings.prompt("interact","Exit sector") if GameState.can_exit() else "EXIT LOCKED // " + GameState.missing_requirements()
 	if opened: return ""
-	return "E  Open security gate" if GameState.can_exit() else "SECURITY // requires power, sector card and containment clearance"
+	return Settings.prompt("interact","Open security gate") if GameState.can_exit() else "SECURITY // " + GameState.missing_requirements()
 
 func interact(_player: Node) -> void:
-	if role == "T":
+	if role == "Z":
+		if _player.keycards.has("card_"+str(GameState.level)):
+			GameState.restore_power()
+			EventBus.narrative.emit("SHIVA // You have found a circuit I did not authorize.")
+		else: EventBus.message.emit("Auxiliary bridge needs the sector access card")
+	elif role == "T":
 		if GameState.power_restored or get_tree().paused: return
+		var mechanism: String = NeuroCampaign.LEVELS[GameState.level].relay
+		if mechanism == "containment" and GameState.living_kinds().has("brute"):
+			EventBus.message.emit("Lift routing denied // neutralize Atlas containment first")
+			return
+		if mechanism in ["valve","containment"]:
+			GameState.restore_power()
+			EventBus.narrative.emit(NeuroCampaign.LEVELS[GameState.level].voice)
+			return
 		var hack := NeuroHackPanel.new()
 		hack.finished.connect(_hack_finished)
 		get_tree().root.add_child(hack)
@@ -27,7 +45,7 @@ func interact(_player: Node) -> void:
 
 func _hack_finished(won: bool) -> void:
 	if won:
-		EventBus.message.emit(NeuroCampaign.LEVELS[GameState.level].voice)
+		EventBus.narrative.emit(NeuroCampaign.LEVELS[GameState.level].voice)
 		GameState.restore_power()
 		return
 	# Trace consequence (web: alarm + enemies converge). The relay can be retried.

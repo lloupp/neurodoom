@@ -3,6 +3,7 @@ extends Node
 # Authored synthesized placeholders, generated locally; no third-party recordings.
 var streams: Dictionary = {}
 var pool: Array[AudioStreamPlayer] = []
+var spatial_pool: Array[AudioStreamPlayer3D] = []
 var beds: Dictionary = {}
 # World threat 0..1 (web reference world.threat): highest awareness among living enemies.
 var threat := 0.0
@@ -22,6 +23,12 @@ func _ready() -> void:
 		player.playback_type = AudioServer.PLAYBACK_TYPE_STREAM
 		add_child(player)
 		pool.append(player)
+	for i in 16:
+		var spatial := AudioStreamPlayer3D.new()
+		spatial.max_distance = 32.0
+		spatial.unit_size = 4.0
+		add_child(spatial)
+		spatial_pool.append(spatial)
 	for id in ["ambient", "music"]:
 		var player := AudioStreamPlayer.new()
 		player.playback_type = AudioServer.PLAYBACK_TYPE_STREAM
@@ -63,13 +70,24 @@ func play(id: String, bus := "SFX") -> void:
 
 func _exit_tree() -> void:
 	for player in get_children():
-		if player is AudioStreamPlayer:
+		if player is AudioStreamPlayer or player is AudioStreamPlayer3D:
 			player.stop()
 			player.stream = null
 	streams.clear()
 
 func shutdown() -> void:
 	for player in get_children():
-		if player is AudioStreamPlayer:
+		if player is AudioStreamPlayer or player is AudioStreamPlayer3D:
 			player.stop()
 			player.stream = null
+
+func play_at(id: String, point: Vector3, bus := "SFX") -> void:
+	if DisplayServer.get_name() == "headless" or not streams.has(id): return
+	for player in spatial_pool:
+		if not player.playing:
+			player.stream = streams[id]
+			player.bus = bus
+			player.position = point
+			player.volume_db = -8
+			player.play()
+			return

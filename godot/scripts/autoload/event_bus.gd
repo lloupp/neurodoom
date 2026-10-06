@@ -16,3 +16,5 @@ func log_event(kind: String, payload: Dictionary = {}) -> void:
 signal message(text: String)
 signal hit_confirmed
 signal player_died
+
+signal narrative(text: String)

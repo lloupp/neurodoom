@@ -83,7 +83,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action("interact"): _interact()
 	elif event.is_action("reload"): reload_weapon()
 	elif event.is_action("quick_save"): GameState.save_game()
-	elif event.is_action("quick_load"): GameState.load_game()
+	elif event.is_action("quick_load"): GameState.load_game(NeuroSaveSystem.SAVE_PATH if not NeuroSaveSystem.read_save().is_empty() else "")
 	else:
 		for i in Weapons.ORDER.size():
 			if event.is_action("weapon_%d" % (i + 1)): select_weapon(Weapons.ORDER[i])
@@ -124,7 +124,7 @@ func _physics_process(delta: float) -> void:
 	footstep_time -= delta
 	if moving and is_on_floor() and footstep_time <= 0:
 		footstep_time = 0.35
-		AudioDirector.play("footstep")
+		AudioDirector.play_at("footstep",global_position)
 		EventBus.log_event("footstep",{"x":position.x,"z":position.z})
 	_update_interaction_prompt()
 	light_timer -= delta

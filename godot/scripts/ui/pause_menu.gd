@@ -35,8 +35,8 @@ func _menu() -> void:
 	_clear()
 	var box := Factory.panel(root,"PAUSED")
 	Factory.button(box,"RESUME",resume).grab_focus()
-	Factory.button(box,"SAVE",GameState.save_game)
-	Factory.button(box,"LOAD",GameState.load_game)
+	Factory.button(box,"SAVE MANUAL",_save)
+	Factory.button(box,"LOAD / RECOVER",_slots)
 	Factory.button(box,"OPTIONS",_options)
 	Factory.button(box,"RETURN TO MAIN MENU",GameState.return_to_menu)
 
@@ -63,3 +63,19 @@ func _retry() -> void:
 	dead = false
 	resume()
 	GameState.respawn()
+
+func _save() -> void:
+	var success := GameState.save_game()
+	var box := root.find_children("*","VBoxContainer",true,false)
+	if not box.is_empty():
+		var status := box[0].get_node_or_null("SaveStatus") as Label
+		if status == null:
+			status = Label.new()
+			status.name = "SaveStatus"
+			status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			box[0].add_child(status)
+		status.text = "MANUAL SAVE COMPLETE" if success else NeuroSaveSystem.last_error
+
+func _slots() -> void:
+	_clear()
+	Factory.save_slots(root,_menu)

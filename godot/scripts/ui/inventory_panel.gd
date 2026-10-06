@@ -63,8 +63,8 @@ func _list() -> void:
 	_line(box,"LOGS")
 	if player.inventory.is_empty(): _line(box,"  none recovered")
 	for item_id in player.inventory:
-		Factory.button(box,str(item_id).replace("_"," ").to_upper(),_read.bind(str(item_id)))
-	Factory.button(box,"CLOSE [TAB]",close)
+		Factory.button(box,log_title(str(item_id)),_read.bind(str(item_id)))
+	Factory.button(box,Settings.prompt("inventory","CLOSE"),close)
 
 func _read(item_id: String) -> void:
 	_clear()
@@ -72,3 +72,8 @@ func _read(item_id: String) -> void:
 	var text := log_text(item_id)
 	_line(box,text if not text.is_empty() else "[corrupted record]")
 	Factory.button(box,"BACK",_list).grab_focus()
+
+static func log_title(item_id: String) -> String:
+	for level in Campaign.LEVELS:
+		if item_id.begins_with(str(level.id)+"_"): return str(level.title) + " // recovered record"
+	return "Recovered record"

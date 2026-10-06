@@ -1,7 +1,10 @@
 class_name NeuroSaveSystem
 extends RefCounted
 
-const SAVE_PATH := "user://neurodoom_production_save.json"
+const LEGACY_PATH := "user://neurodoom_production_save.json"
+const SAVE_PATH := "user://neurodoom_manual_save.json"
+const AUTO_PATH := "user://neurodoom_autosave.json"
+const PREVIOUS_PATH := "user://neurodoom_previous_campaign.json"
 const VERSION := 2
 const Weapons = preload("res://data/weapon_catalog.gd")
 const Enemies = preload("res://data/enemy_catalog.gd")
@@ -105,7 +108,9 @@ static func read_save(path := SAVE_PATH) -> Dictionary:
 	if not file or file.get_length() > 4000000:
 		last_error = "Save unreadable or too large."
 		return {}
-	var parsed = JSON.parse_string(file.get_as_text())
+	var json := JSON.new()
+	var parsed: Variant = null
+	if json.parse(file.get_as_text()) == OK: parsed = json.data
 	if not parsed is Dictionary:
 		last_error = "Malformed save; file retained."
 		return {}
@@ -117,3 +122,30 @@ static func read_save(path := SAVE_PATH) -> Dictionary:
 
 static func clear_save() -> void:
 	if FileAccess.file_exists(SAVE_PATH): DirAccess.remove_absolute(ProjectSettings.globalize_path(SAVE_PATH))
+
+static func available_slots() -> Array[Dictionary]:
+	var slots: Array[Dictionary] = []
+	for pair in [[SAVE_PATH,"Manual"],[AUTO_PATH,"Autosave"],[PREVIOUS_PATH,"Previous campaign"],[LEGACY_PATH,"Legacy"]]:
+		for suffix in ["", ".bak"]:
+			var path: String = str(pair[0])+str(suffix)
+			if not FileAccess.file_exists(path): continue
+			var data := read_save(path)
+			if not data.is_empty():
+				slots.append({"path":path,"label":str(pair[1])+(" backup" if suffix == ".bak" else ""),"data":data,"time":float(data.get("saved_at",FileAccess.get_modified_time(path)))})
+	return slots
+
+static func latest_save() -> Dictionary:
+	var candidates := available_slots().filter(func(slot): return slot.path in [SAVE_PATH,AUTO_PATH,LEGACY_PATH])
+	candidates.sort_custom(func(a,b): return float(a.time) > float(b.time))
+	if candidates.is_empty(): return {}
+	last_error = ""
+	return candidates[0].data
+
+static func preserve_previous() -> bool:
+	# Starting a new run must not destroy the only restorable campaign.
+	if not FileAccess.file_exists(AUTO_PATH): return true
+	var result := DirAccess.copy_absolute(ProjectSettings.globalize_path(AUTO_PATH),ProjectSettings.globalize_path(PREVIOUS_PATH))
+	if result != OK:
+		last_error = "Cannot preserve previous campaign. New game was not started."
+		return false
+	return true

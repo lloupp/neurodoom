@@ -70,7 +70,7 @@ func detonate(collider: Object) -> void:
 			else:
 				body.apply_damage(amount, global_position)
 		EventBus.log_event("explosion", {"x":global_position.x,"z":global_position.z})
-		AudioDirector.play("explosion", "Weapons")
+		AudioDirector.play_at("explosion",global_position,"Weapons")
 	NeuroImpact.spawn(get_tree().current_scene, global_position, "explosion" if splash > 0 else fx_kind())
 	if splash > 0 and _normal != Vector3.ZERO:
 		NeuroImpact.scorch(get_tree().current_scene, global_position, _normal, 2.4)

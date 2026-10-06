@@ -22,7 +22,8 @@ func add_sprite() -> void:
 	add_child(sprite)
 
 func get_interaction_prompt() -> String:
-	return "E  " + pickup_type.replace("_"," ").to_upper() + " +%d" % amount
+	if pickup_type == "weapon": return Settings.prompt("interact","RECOVER " + str(NeuroWeapons.DATA[item_id].name) if NeuroWeapons.DATA.has(item_id) else "WEAPON CACHE")
+	return Settings.prompt("interact", pickup_type.replace("_"," ").to_upper() + (" +%d" % amount if pickup_type not in ["keycard","audio_log","weapon"] else ""))
 
 func interact(player: Node) -> void:
 	if collected: return
@@ -38,13 +39,18 @@ func interact(player: Node) -> void:
 		"rocket": player.add_ammo(amount,"rocket_launcher")
 		"keycard":
 			if not player.keycards.has(item_id): player.keycards.append(item_id)
+		"weapon":
+			if not NeuroWeapons.ORDER.has(item_id): return
+			if not player.unlocked.has(item_id): player.unlocked.append(item_id)
+			player.select_weapon(item_id)
 		"credits": player.credits += amount
 		"data_log", "audio_log":
 			if not player.inventory.has(item_id): player.inventory.append(item_id)
 		_: return
 	collected = true
 	var message := "RECOVERED // " + pickup_type.replace("_"," ")
-	if not log_text.is_empty(): message += "\n" + log_text
+	if not log_text.is_empty(): EventBus.narrative.emit(log_text)
+	GameState.refresh_objective()
 	EventBus.message.emit(message)
 	AudioDirector.play("pickup","UI")
 	EventBus.log_event("pickup",{"type":pickup_type,"id":str(name),"amount":amount})

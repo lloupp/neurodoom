@@ -14,6 +14,8 @@ var boss_bar: ProgressBar
 var stamina_bar: ProgressBar
 var shadow_label: Label
 var vignette: ColorRect
+var narrative_label: Label
+var narrative_time := 0.0
 var message_time := 0.0
 var hit_time := 0.0
 var previous_hp := 100
@@ -34,7 +36,9 @@ func label(text: String,pos: Vector2,size_value := Vector2(800,40),font_size := 
 	item.text = text
 	item.position = pos
 	item.size = size_value
-	item.add_theme_font_size_override("font_size",font_size)
+	item.add_theme_font_size_override("font_size",roundi(font_size * Settings.values.text_scale))
+	item.set_meta("base_font_size",font_size)
+	item.add_to_group("scaled_hud_labels")
 	item.add_theme_color_override("font_color",Color("#bce2e8"))
 	item.add_theme_color_override("font_shadow_color",Color.BLACK)
 	item.add_theme_constant_override("shadow_offset_x",2)
@@ -96,6 +100,9 @@ func _ready() -> void:
 	hit_label.hide()
 	message_label = label("",Vector2(24,95),Vector2(900,140),18)
 	message_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	narrative_label = label("",Vector2(24,245),Vector2(900,120),18)
+	narrative_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	EventBus.narrative.connect(func(text: String): narrative_label.text = text; narrative_time = 12.0)
 	boss_label = label("",Vector2.ZERO,Vector2(700,40))
 	boss_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
 	boss_label.position = Vector2(-350,165)
@@ -134,7 +141,9 @@ func _message(text: String) -> void:
 
 func _process(delta: float) -> void:
 	message_time = maxf(0,message_time-delta)
-	message_label.visible = message_time > 0 and Settings.values.subtitles
+	message_label.visible = message_time > 0
+	narrative_time = maxf(0,narrative_time-delta)
+	narrative_label.visible = narrative_time > 0 and Settings.values.subtitles
 	hit_time = maxf(0,hit_time-delta)
 	hit_label.visible = hit_time > 0
 	damage_pulse = move_toward(damage_pulse,0,delta*1.6)

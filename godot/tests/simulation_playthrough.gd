@@ -14,6 +14,8 @@ var key_states: Dictionary = {}
 var kills_at_start := 0
 
 func _ready() -> void:
+	# Keeps running while a relay hack pauses the world.
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	seed(14)
 	call_deferred("_start")
 
@@ -34,6 +36,14 @@ func key(code: int, pressed: bool) -> void:
 
 func _physics_process(_delta: float) -> void:
 	if not active or not is_instance_valid(GameState.player): return
+	# Solve relay hacks like a player: decode each hint (shift -1) and pick that opcode.
+	var hack: NeuroHackPanel = null
+	for child in get_tree().root.get_children():
+		if child is NeuroHackPanel: hack = child
+	if hack:
+		if hack.selected >= 0: hack.pick(NeuroHacking.caesar(hack.state.program[hack.selected].hint,-1))
+		if hack.state.status != "running": print("SIM HACK ",hack.state.status," level=",GameState.level)
+		return
 	frames += 1
 	if frames % 300 == 0:
 		print("SIM progress frames=",frames," level=",GameState.level," position=",GameState.player.position," goal=",str(goal.name) if is_instance_valid(goal) else "none"," hp=",GameState.player.health," path=",path.size())

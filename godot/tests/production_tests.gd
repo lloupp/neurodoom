@@ -213,6 +213,22 @@ func _catalogs() -> void:
 	capture_root.free()
 	Settings.reset_bindings()
 	check(Settings.key_for("move_forward") == KEY_W and Settings.key_for("interact") == KEY_E,"reset bindings")
+	check(NeuroHacking.caesar("MOV",1) == "NPW" and NeuroHacking.caesar("NPW",-1) == "MOV" and NeuroHacking.caesar("ZAP",1) == "ABQ","hack caesar shift")
+	for difficulty in 3:
+		var hack := NeuroHacking.generate(7,difficulty)
+		check(hack.program.size() == 3*NeuroHacking.LINE_WIDTH[difficulty] and hack.missing.size() == NeuroHacking.MISSING[difficulty],"hack layout %d" % difficulty)
+		var solvable := true
+		for i in hack.missing:
+			solvable = solvable and hack.bank.has(hack.solution[i]) and NeuroHacking.caesar(hack.program[i].hint,-1) == hack.solution[i]
+		check(solvable,"hack hints decode to banked answers %d" % difficulty)
+	var run := NeuroHacking.generate(3,1)
+	var wrong := "NOP" if run.solution[run.missing[0]] != "NOP" else "MOV"
+	check(not NeuroHacking.submit(run,run.missing[0],wrong) and run.traces == 2,"wrong opcode costs a trace")
+	for i in run.missing: NeuroHacking.submit(run,i,run.solution[i])
+	check(run.status == "won","correct opcodes win")
+	var slow := NeuroHacking.generate(3,1)
+	NeuroHacking.tick(slow,1000.0)
+	check(slow.status == "lost","timeout loses")
 	check(Forge._parse_stem("walk_front_left_003").frame == 3,"forge naming")
 	check(Forge._parse_stem("invalid").is_empty(),"forge rejects missing frame")
 

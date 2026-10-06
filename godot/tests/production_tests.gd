@@ -160,6 +160,18 @@ func _catalogs() -> void:
 	var w := InputEventKey.new()
 	w.physical_keycode = KEY_W
 	check(w.is_action("move_forward"),"physical W moves forward")
+	Settings.rebind("move_forward",KEY_E)
+	check(Settings.key_for("move_forward") == KEY_E and Settings.key_for("interact") == KEY_W,"rebind swaps conflicting key")
+	var saved := ConfigFile.new()
+	saved.load(Settings.PATH)
+	check(saved.get_value("bindings","move_forward") == KEY_E,"bindings persisted")
+	var capture_root := Control.new()
+	get_tree().root.add_child(capture_root)
+	NeuroMenuFactory.controls(capture_root,func(): pass)
+	check(get_tree().get_nodes_in_group("key_capture").size() == Settings.BINDINGS.size(),"controls screen lists every action")
+	capture_root.free()
+	Settings.reset_bindings()
+	check(Settings.key_for("move_forward") == KEY_W and Settings.key_for("interact") == KEY_E,"reset bindings")
 	check(Forge._parse_stem("walk_front_left_003").frame == 3,"forge naming")
 	check(Forge._parse_stem("invalid").is_empty(),"forge rejects missing frame")
 

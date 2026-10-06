@@ -23,6 +23,9 @@ func _ready() -> void:
 		for key in values:
 			var value = config.get_value("settings", key, values[key])
 			if typeof(value) == typeof(values[key]): values[key] = value
+		for action in BINDINGS:
+			var code = config.get_value("bindings", action, BINDINGS[action])
+			if typeof(code) == TYPE_INT and code > 0: _bind(action, code)
 	values.sensitivity = clampf(values.sensitivity, 0.0005, 0.006)
 	values.fov = clampf(values.fov, 60, 110)
 	apply()
@@ -39,4 +42,29 @@ func apply() -> void:
 		light.shadow_enabled = int(values.quality) >= 2
 	var config := ConfigFile.new()
 	for key in values: config.set_value("settings", key, values[key])
+	for action in BINDINGS: config.set_value("bindings", action, key_for(action))
 	config.save(PATH)
+
+func key_for(action: String) -> int:
+	for event in InputMap.action_get_events(action):
+		if event is InputEventKey: return event.physical_keycode
+	return 0
+
+func _bind(action: String, code: int) -> void:
+	for event in InputMap.action_get_events(action):
+		if event is InputEventKey: InputMap.action_erase_event(action, event)
+	var event := InputEventKey.new()
+	event.physical_keycode = code
+	InputMap.action_add_event(action, event)
+
+# Assign a key; an action already using it receives the old key (swap), so nothing is left unbound.
+func rebind(action: String, code: int) -> void:
+	var previous := key_for(action)
+	for other in BINDINGS:
+		if other != action and key_for(other) == code: _bind(other, previous)
+	_bind(action, code)
+	apply()
+
+func reset_bindings() -> void:
+	for action in BINDINGS: _bind(action, BINDINGS[action])
+	apply()

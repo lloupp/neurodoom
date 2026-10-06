@@ -58,4 +58,27 @@ static func options(parent: Node,back: Callable) -> void:
 		select.selected = clampi(Settings.values[pair[0]],0,2)
 		select.item_selected.connect(func(value: int): Settings.values[pair[0]] = value; Settings.apply())
 		box.add_child(select)
+	button(box,"CONTROLS",func(): _reset(parent); controls(parent,func(): _reset(parent); options(parent,back)))
 	button(box,"BACK",back)
+
+static func _reset(parent: Node) -> void:
+	for child in parent.get_children():
+		parent.remove_child(child)
+		child.queue_free()
+
+static func controls(parent: Node,back: Callable) -> void:
+	var box := panel(parent,"CONTROLS")
+	for action in Settings.BINDINGS:
+		var row := HBoxContainer.new()
+		box.add_child(row)
+		var label := Label.new()
+		label.text = action.replace("_"," ").to_upper()
+		label.custom_minimum_size.x = 260
+		row.add_child(label)
+		var key := KeyCapture.new()
+		key.action = action
+		key.custom_minimum_size = Vector2(200,32)
+		row.add_child(key)
+	button(box,"RESET DEFAULTS",func(): Settings.reset_bindings(); _reset(parent); controls(parent,back))
+	button(box,"BACK",back)
+

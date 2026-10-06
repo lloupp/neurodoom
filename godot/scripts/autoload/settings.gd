@@ -3,7 +3,21 @@ extends Node
 const PATH := "user://neurodoom_settings.cfg"
 var values := {"master":0.8,"music":0.6,"sfx":0.8,"sensitivity":0.0022,"fov":78.0,"fullscreen":false,"resolution":0,"quality":1,"motion":true,"shake":true,"subtitles":true}
 
+# Physical keys keep the WASD layout on AZERTY/QWERTZ keyboards.
+const BINDINGS := {"move_forward":KEY_W,"move_back":KEY_S,"move_left":KEY_A,"move_right":KEY_D,"sprint":KEY_SHIFT,"interact":KEY_E,"reload":KEY_R,"weapon_1":KEY_1,"weapon_2":KEY_2,"weapon_3":KEY_3,"weapon_4":KEY_4,"inventory":KEY_TAB,"quick_save":KEY_F5,"quick_load":KEY_F9}
+
 func _ready() -> void:
+	for action in BINDINGS:
+		if InputMap.has_action(action): continue
+		InputMap.add_action(action)
+		var event := InputEventKey.new()
+		event.physical_keycode = BINDINGS[action]
+		InputMap.action_add_event(action, event)
+	if not InputMap.has_action("fire"):
+		InputMap.add_action("fire")
+		var click := InputEventMouseButton.new()
+		click.button_index = MOUSE_BUTTON_LEFT
+		InputMap.action_add_event("fire", click)
 	var config := ConfigFile.new()
 	if config.load(PATH) == OK:
 		for key in values:

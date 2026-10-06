@@ -35,7 +35,7 @@ Controls:
 - Left mouse: fire
 - E: interact
 - Shift: sprint
-- Esc: pause/resume
+- Esc: pause/resume (controls are InputMap actions on physical keys; AZERTY keeps WASD positions)
 - 1–4: select weapon
 - R: reload
 - TAB: inventory summary

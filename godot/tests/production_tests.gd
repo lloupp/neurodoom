@@ -155,6 +155,11 @@ func _catalogs() -> void:
 		# Effect is not cut by its region: a transparent margin remains on every side.
 		check(used.position.x > 0 and used.position.y > 0 and used.end.x < int(region.size.x) and used.end.y < int(region.size.y),"fx region not clipped " + kind)
 		check(NeuroImpact.texture(kind) == NeuroImpact.texture(kind),"fx texture cached " + kind)
+	for action in Settings.BINDINGS.keys() + ["fire"]:
+		check(InputMap.has_action(action) and not InputMap.action_get_events(action).is_empty(),"input action bound " + action)
+	var w := InputEventKey.new()
+	w.physical_keycode = KEY_W
+	check(w.is_action("move_forward"),"physical W moves forward")
 	check(Forge._parse_stem("walk_front_left_003").frame == 3,"forge naming")
 	check(Forge._parse_stem("invalid").is_empty(),"forge rejects missing frame")
 

@@ -56,3 +56,5 @@ A normal-mechanics headless bot completed sectors 0–4 without HP overrides, te
 - P2: moving enemies had no separation and stacked on one point. Added light local separation steering.
 - P2: legacy slice "RETRY CHECKPOINT" respawned in place but left the death menu up, tree paused and mouse released. Pause menu now resumes before respawn.
 - Tests: 562 checks (alert-on-damage, separation). All Godot gates and gameplay simulation pass. No human playtest has occurred.
+- fx.svg now drives impacts (spark on walls, energy on enemies), toxic/energy/rocket projectiles and explosions (with a short unshadowed light). The sheet has no grid, so explicit regions live in `NeuroImpact.REGIONS` and `runtime_manifest.json` `fx_regions`; tests check manifest match, non-empty pixels and no clipping. `bolt` region is directional and not yet used.
+- Player input moved from hard-coded keycodes to InputMap actions on physical keys (registered by the Settings autoload). A rebinding UI is not implemented yet.

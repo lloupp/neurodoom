@@ -28,6 +28,7 @@ func key(code: int, pressed: bool) -> void:
 	key_states[code] = pressed
 	var event := InputEventKey.new()
 	event.keycode = code
+	event.physical_keycode = code
 	event.pressed = pressed
 	Input.parse_input_event(event)
 

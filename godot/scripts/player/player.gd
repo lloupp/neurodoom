@@ -65,17 +65,18 @@ func _unhandled_input(event: InputEvent) -> void:
 		rotate_y(-event.relative.x * Settings.values.sensitivity)
 		pitch = clampf(pitch - event.relative.y * Settings.values.sensitivity,-1.3,1.3)
 		view_model.sway = Vector2(-event.relative.x,event.relative.y).limit_length(14)
-	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
-		firing = event.pressed
+	elif event.is_action("fire"):
+		firing = event.is_pressed()
 		if firing and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED: _fire()
-	elif event is InputEventKey and event.pressed and not event.echo:
-		match event.keycode:
-			KEY_E: _interact()
-			KEY_R: reload_weapon()
-			KEY_1, KEY_2, KEY_3, KEY_4: select_weapon(Weapons.ORDER[event.keycode - KEY_1])
-			KEY_F5: GameState.save_game()
-			KEY_F9: GameState.load_game()
-			KEY_TAB: EventBus.message.emit("KEYS %s // CREDITS %d // LOGS %s" % [str(keycards),credits,str(inventory)])
+	elif event.is_echo() or not event.is_pressed(): return
+	elif event.is_action("interact"): _interact()
+	elif event.is_action("reload"): reload_weapon()
+	elif event.is_action("quick_save"): GameState.save_game()
+	elif event.is_action("quick_load"): GameState.load_game()
+	elif event.is_action("inventory"): EventBus.message.emit("KEYS %s // CREDITS %d // LOGS %s" % [str(keycards),credits,str(inventory)])
+	else:
+		for i in Weapons.ORDER.size():
+			if event.is_action("weapon_%d" % (i + 1)): select_weapon(Weapons.ORDER[i])
 
 func _physics_process(delta: float) -> void:
 	if health <= 0 or GameState.completed: return
@@ -90,10 +91,10 @@ func _physics_process(delta: float) -> void:
 			reserve_ammo -= moved
 			view_model.animate("idle")
 			refresh_hud()
-	if firing and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and bool(_weapon_data().automatic) and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED: _fire()
-	var input := Vector2(float(Input.is_key_pressed(KEY_D))-float(Input.is_key_pressed(KEY_A)),float(Input.is_key_pressed(KEY_S))-float(Input.is_key_pressed(KEY_W))).limit_length(1)
+	if firing and Input.is_action_pressed("fire") and bool(_weapon_data().automatic) and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED: _fire()
+	var input := Input.get_vector("move_left","move_right","move_forward","move_back")
 	var move_dir := global_transform.basis * Vector3(input.x,0,input.y)
-	var move_speed := 7.5 if Input.is_key_pressed(KEY_SHIFT) else 5.0
+	var move_speed := 7.5 if Input.is_action_pressed("sprint") else 5.0
 	velocity.x = move_toward(velocity.x,move_dir.x*move_speed,delta*25)
 	velocity.z = move_toward(velocity.z,move_dir.z*move_speed,delta*25)
 	velocity.y = -0.1 if is_on_floor() else velocity.y - 20*delta

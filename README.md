@@ -1,5 +1,11 @@
 # NEURODOOM
 
+**Current desktop game: Godot 4.7.2 Standard.** Import [`godot/project.godot`](godot/project.godot), press F5 and choose NEW GAME. Native production work lives on `feat/godot-production-vertical-slice`; the product evolution PR is stacked on that branch.
+
+Five-sector first-person campaign candidate with combat, exploration, terminal access, SHIVA Warden, save recovery, settings and desktop test builds. Read [native instructions](godot/README.md), [product evolution](godot/docs/PRODUCT_EVOLUTION.md) and [human test protocol](godot/docs/HUMAN_PLAYTEST.md). Human/audio/Windows/hardware validation remains open.
+
+The browser/Capacitor version below is the preserved legacy implementation and reference; its instructions and features do not all describe the native build.
+
 > **Cyberpunk immersive-sim FPS — visceral combat meets deep systemic simulation, in the browser.**
 
 You wake up inside a black-site neural implant facility. Every terminal you jack into, every log you recover, walks you closer to a name: **SHIVA**, the corporate god rewriting dreams from inside a server farm.

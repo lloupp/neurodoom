@@ -6,6 +6,8 @@ signal finished(won: bool)
 const Factory = preload("res://scripts/ui/menu_factory.gd")
 var state: Dictionary
 var selected := -1
+var started := false
+var feedback := ""
 var root: Control
 var status_label: Label
 
@@ -20,9 +22,11 @@ func _ready() -> void:
 	GameState.player.firing = false
 	get_tree().paused = true
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	started = not Settings.values.guided_hacking
 	_draw_panel()
 
 func _process(delta: float) -> void:
+	if not started: return
 	NeuroHacking.tick(state, delta)
 	if is_instance_valid(status_label):
 		status_label.text = "TIME %.1f    TRACES %d" % [state.time_left, state.traces]
@@ -34,11 +38,12 @@ func _input(event: InputEvent) -> void:
 		_close(false, true)
 
 func pick(token: String) -> void:
-	if selected < 0: return
+	if not started or selected < 0: return
 	if NeuroHacking.submit(state, selected, token):
 		var open: Array = state.missing.filter(func(i): return state.input.get(i, "") != state.solution[i])
 		selected = open[0] if not open.is_empty() else -1
 	else:
+		feedback = "Incorrect token. Decode each letter one step back; traces remaining: %d" % state.traces
 		AudioDirector.play("alert", "UI")
 	if state.status == "running": _draw_panel()
 
@@ -51,6 +56,19 @@ func _draw_panel() -> void:
 	help.text = "Hint = real opcode shifted +1 letter (NPW → MOV). Select a hole, pick its opcode."
 	help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(help)
+	if not started:
+		var intro := Label.new()
+		intro.text = "Clock paused. Example: N → M, P → O, W → V. NPW means MOV.\nComplete each missing cell before time or traces run out. Failure alerts nearby hostiles."
+		intro.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		box.add_child(intro)
+		Factory.button(box,"START BREACH",func(): started = true; _draw_panel()).grab_focus()
+		Factory.button(box,"ABORT [ESC]",func(): _close(false,true))
+		return
+	if not feedback.is_empty():
+		var message := Label.new()
+		message.text = feedback
+		message.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		box.add_child(message)
 	for line in NeuroHacking.LINES:
 		var row := HBoxContainer.new()
 		box.add_child(row)

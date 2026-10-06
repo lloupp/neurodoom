@@ -68,3 +68,7 @@ A normal-mechanics headless bot completed sectors 0–4 without HP overrides, te
 - Adaptive mix: AudioDirector computes world threat (max awareness: chase/attack/retreat 1.0, alert 0.6), rising fast and decaying slowly; music bed −32→−12 dB, ambient −20→−28 dB. Headless cannot play audio; only the volume logic is tested.
 - Light stealth: player light level 0.25–1 from campaign `quality_lights` (web `lightLevelAt`: 0.35 floor + 0.6 falloff per light), sampled every 0.2 s. Unalerted enemy sight range scales 50–100% with it; alerted enemies keep full range. HUD shows "IN SHADOW" below 0.5. Scenes without campaign lights count as fully lit. How often campaign spaces fall into shadow needs human playtest.
 - Hacking minigame ported from web `Hacking.ts` (3 lines, Caesar+1 hints, token bank, 3 s/token, traces 5/3/2 by difficulty). Campaign neural relays now require a breach; failure triggers a trace (nearby enemies converge) and the relay can be retried; Esc aborts without penalty. The gameplay bot solves each breach by decoding hints (levels 0–3), not by setting flags.
+
+## Product evolution follow-up
+
+The 2026-10-06 product audit and authorized implementation are tracked in [PRODUCT_EVOLUTION.md](PRODUCT_EVOLUTION.md). Earlier gap tables above describe their historical baseline; use the follow-up for current native controls, hacking, inventory, save UX, audio and authoring status.

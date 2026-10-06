@@ -22,7 +22,12 @@ if a.export:
 with tempfile.TemporaryDirectory(prefix="neurodoom-tests-") as user_data:
  env={**os.environ,'XDG_DATA_HOME':user_data,'XDG_CONFIG_HOME':user_data} if not a.export else os.environ.copy()
  for title,args in commands:
-  result=subprocess.run([a.godot,'--headless','--path',str(project),*args],env=env,text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,timeout=180)
+  try:
+   result=subprocess.run([a.godot,'--headless','--path',str(project),*args],env=env,text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,timeout=180)
+  except subprocess.TimeoutExpired as error:
+   output=error.stdout or b''
+   print(output.decode(errors='replace') if isinstance(output,bytes) else output)
+   raise SystemExit(f'{title}: timeout after 180 seconds; output retained above')
   failures=re.findall(r'^.*(?:SCRIPT ERROR|ERROR:|WARNING:|TEST FAIL).*$',result.stdout,re.M)
   print(f'{title}: '+('PASS' if not failures and result.returncode==0 else 'FAIL'),flush=True)
   if failures or result.returncode:

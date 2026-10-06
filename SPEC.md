@@ -1,4 +1,6 @@
-# NEURODOOM — Specification
+# NEURODOOM — Legacy web specification
+
+This file documents the preserved TypeScript/Canvas implementation. The native Godot campaign is described in `godot/README.md` and `godot/docs/PRODUCT_EVOLUTION.md`. Web persistence, rendering, inventory and platform promises are not native feature claims.
 
 > **Cyberpunk immersive-sim FPS — visceral combat meets deep systemic simulation, in the browser.**
 

@@ -28,6 +28,7 @@ func _record(kind: String, payload: Dictionary) -> void:
 		"enemy_killed":
 			stats.kills += 1
 			if payload.kind == "boss": flags.warden_defeated = true
+			call_deferred("refresh_objective")
 		"shot_fired": stats.shots += 1
 		"shot_hit": stats.hits += 1
 		"player_died": stats.deaths += 1
@@ -50,6 +51,9 @@ func reset_run() -> void:
 	EventBus.log_event("run_started")
 
 func new_game() -> void:
+	if not SaveSystem.preserve_previous():
+		EventBus.message.emit(SaveSystem.last_error)
+		return
 	reset_run()
 	campaign_mode = true
 	get_tree().paused = false
@@ -66,16 +70,16 @@ func restore_power() -> void:
 	flags.power = true
 	EventBus.power_restored.emit()
 	AudioDirector.play("terminal","UI")
-	set_objective("Find access and open the security gate." if campaign_mode else "Open the A3 security door and reach the SHIVA core.")
-	save_game()
+	refresh_objective() if campaign_mode else set_objective("Open the A3 security door and reach the SHIVA core.")
+	save_game(true)
 
 func mark_door_open() -> void:
 	if door_open: return
 	door_open = true
 	EventBus.door_unlocked.emit()
 	AudioDirector.play("door")
-	set_objective("Reach the sector exit." if campaign_mode else "Reach the SHIVA core interface.")
-	save_game()
+	refresh_objective() if campaign_mode else set_objective("Reach the SHIVA core interface.")
+	save_game(true)
 
 func complete_slice() -> void:
 	if completed: return
@@ -83,7 +87,7 @@ func complete_slice() -> void:
 	set_objective("SHIVA link severed. Subject 14 is free." if campaign_mode else "VERTICAL SLICE COMPLETE — SHIVA link established.")
 	EventBus.log_event("campaign_completed" if campaign_mode else "slice_completed",{"level":level})
 	EventBus.game_completed.emit()
-	save_game()
+	save_game(true)
 
 func living_kinds() -> Array:
 	var result: Array = []
@@ -97,7 +101,7 @@ func can_exit() -> bool:
 
 func advance() -> void:
 	if not can_exit():
-		EventBus.message.emit("ACCESS DENIED // check terminal, card and containment objective")
+		EventBus.message.emit("ACCESS DENIED // " + missing_requirements())
 		return
 	if level == Campaign.LEVELS.size()-1:
 		complete_slice()
@@ -121,17 +125,17 @@ func snapshot() -> Dictionary:
 		records[str(node.name)] = node.save_snapshot()
 	for id in defeated:
 		if not records.has(id): records[id] = {"kind":"enemy","hp":0,"dead":true,"position":[0,0,0]}
-	return {"version":SaveSystem.VERSION,"campaign":campaign_mode,"level":level,"power_restored":power_restored,"door_open":door_open,"completed":completed,"objective":current_objective,"flags":flags.duplicate(),"defeated":defeated.duplicate(),"world":records,"stats":stats.duplicate(),"player":player.save_snapshot()}
+	return {"saved_at":Time.get_unix_time_from_system(),"version":SaveSystem.VERSION,"campaign":campaign_mode,"level":level,"power_restored":power_restored,"door_open":door_open,"completed":completed,"objective":current_objective,"flags":flags.duplicate(),"defeated":defeated.duplicate(),"world":records,"stats":stats.duplicate(),"player":player.save_snapshot()}
 
-func save_game() -> bool:
+func save_game(autosave := false) -> bool:
 	if not is_instance_valid(player) or player.health <= 0: return false
-	var success := SaveSystem.write_save(snapshot())
+	var success := SaveSystem.write_save(snapshot(),SaveSystem.AUTO_PATH if autosave else SaveSystem.SAVE_PATH)
 	EventBus.message.emit("SAVED" if success else SaveSystem.last_error)
-	if success: EventBus.log_event("save_written",{"level":level})
+	if success: EventBus.log_event("save_written",{"level":level,"automatic":autosave})
 	return success
 
-func load_game() -> bool:
-	var data := SaveSystem.read_save()
+func load_game(path := "") -> bool:
+	var data := SaveSystem.latest_save() if path.is_empty() else SaveSystem.read_save(path)
 	if data.is_empty():
 		EventBus.message.emit(SaveSystem.last_error if not SaveSystem.last_error.is_empty() else "No saved run")
 		return false
@@ -139,6 +143,7 @@ func load_game() -> bool:
 	return true
 
 func restore_run(data: Dictionary) -> void:
+	EventBus.log_event("run_loaded",{"level":data.level})
 	campaign_mode = bool(data.campaign)
 	level = int(data.level)
 	power_restored = bool(data.power_restored)
@@ -186,3 +191,20 @@ func return_to_menu() -> void:
 	get_tree().paused = false
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	get_tree().change_scene_to_file("res://scenes/menu.tscn")
+
+func missing_requirements() -> String:
+	if not campaign_mode or not is_instance_valid(player): return "Restore facility power"
+	var missing: Array[String] = []
+	if level == Campaign.LEVELS.size()-1:
+		if not flags.get("warden_defeated",false): missing.append("Defeat the Warden")
+	else:
+		if not flags.get("power",false): missing.append({"breach":"Breach the neural relay","valve":"Close the root isolation valve","containment":"Route the containment lift"}.get(Campaign.LEVELS[level].relay,"Restore sector power"))
+		if not player.keycards.has("card_"+str(level)): missing.append("Find the sector access card")
+		if Campaign.LEVELS[level].required_clear and living_kinds().has("brute"): missing.append("Clear brute containment")
+	return " / ".join(missing)
+
+func refresh_objective() -> void:
+	if not campaign_mode or completed or not is_instance_valid(player): return
+	var remaining := missing_requirements()
+	var text := str(Campaign.LEVELS[level].title) + " // " + (remaining if not remaining.is_empty() else ("Open the security gate" if not door_open and level < 4 else "Reach the sector exit"))
+	if text != current_objective: set_objective(text)

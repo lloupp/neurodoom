@@ -1,7 +1,7 @@
 extends Node
 
 const PATH := "user://neurodoom_settings.cfg"
-var values := {"master":0.8,"music":0.6,"sfx":0.8,"sensitivity":0.0022,"fov":78.0,"fullscreen":false,"resolution":0,"quality":1,"motion":true,"shake":true,"subtitles":true,"difficulty":1}
+var values := {"master":0.8,"music":0.6,"sfx":0.8,"sensitivity":0.0022,"fov":78.0,"fullscreen":false,"resolution":0,"quality":1,"motion":true,"shake":true,"subtitles":true,"difficulty":1,"text_scale":1.0,"guided_hacking":true}
 # Damage taken multiplier per difficulty (web reference DIFFICULTY_DAMAGE_TAKEN).
 const DAMAGE_TAKEN := [0.6, 1.0, 1.5]
 
@@ -30,6 +30,7 @@ func _ready() -> void:
 			if typeof(code) == TYPE_INT and code > 0: _bind(action, code)
 	values.sensitivity = clampf(values.sensitivity, 0.0005, 0.006)
 	values.fov = clampf(values.fov, 60, 110)
+	values.text_scale = clampf(values.text_scale, 1.0, 1.4)
 	values.difficulty = clampi(values.difficulty, 0, 2)
 	apply()
 
@@ -43,6 +44,12 @@ func apply() -> void:
 			DisplayServer.window_set_size([Vector2i(1280,720),Vector2i(1600,900),Vector2i(1920,1080)][clampi(values.resolution,0,2)])
 	for light in get_tree().get_nodes_in_group("quality_lights"):
 		light.shadow_enabled = int(values.quality) >= 2
+	for box in get_tree().get_nodes_in_group("menu_panels"):
+		box.theme.default_font_size = roundi(18*values.text_scale)
+	for label in get_tree().get_nodes_in_group("menu_titles"):
+		label.add_theme_font_size_override("font_size",roundi(36*values.text_scale))
+	for label in get_tree().get_nodes_in_group("scaled_hud_labels"):
+		label.add_theme_font_size_override("font_size",roundi(float(label.get_meta("base_font_size"))*values.text_scale))
 	var config := ConfigFile.new()
 	for key in values: config.set_value("settings", key, values[key])
 	for action in BINDINGS: config.set_value("bindings", action, key_for(action))
@@ -71,3 +78,11 @@ func rebind(action: String, code: int) -> void:
 func reset_bindings() -> void:
 	for action in BINDINGS: _bind(action, BINDINGS[action])
 	apply()
+
+func key_label(action: String) -> String:
+	var physical := key_for(action)
+	var local := KEY_NONE if DisplayServer.get_name() == "headless" else DisplayServer.keyboard_get_keycode_from_physical(physical)
+	return OS.get_keycode_string(local if local != KEY_NONE else physical)
+
+func prompt(action: String, text: String) -> String:
+	return "[%s] %s" % [key_label(action), text]

@@ -26,6 +26,9 @@ var aim := Vector3.ZERO
 var clock := 0.0
 var hit_reveal := 0.0
 var attacks := 0
+var route: Array[Vector2i] = []
+var route_time := 0.0
+var route_goal := Vector2i(-999,-999)
 var stats: Dictionary
 
 func _ready() -> void:
@@ -103,7 +106,7 @@ func _physics_process(delta: float) -> void:
 		attack_pending = true
 		aim = target.global_position + Vector3.UP
 		telegraph = 0.9 if enemy_kind == "boss" else (0.5 if enemy_kind == "brute" else 0.25)
-		AudioDirector.play("alert", "Enemies")
+		AudioDirector.play_at("alert",global_position,"Enemies")
 		if enemy_kind == "boss":
 			EventBus.message.emit("WARDEN // " + ("SHOCKWAVE: BACK AWAY" if attacks % 2 == 1 else "VOLLEY: MOVE SIDEWAYS"))
 	var goal := last_known
@@ -131,6 +134,20 @@ func _physics_process(delta: float) -> void:
 	else:
 		state = State.IDLE
 		move_speed = 0
+	var scene := get_tree().current_scene
+	if move_speed > 0 and scene.has_method("navigation_path"):
+		route_time -= delta
+		var goal_cell := NeuroGridNavigation.cell(goal)
+		if route_time <= 0 or goal_cell != route_goal:
+			route = scene.navigation_path(global_position,goal)
+			route_goal = goal_cell
+			route_time = 0.45
+		if not route.is_empty():
+			var next := Vector3(route[0].x*2,global_position.y,route[0].y*2)
+			if global_position.distance_to(next) < 0.5: route.pop_front()
+			if not route.is_empty(): goal = Vector3(route[0].x*2,global_position.y,route[0].y*2)
+		else:
+			move_speed = 0
 	var direction := (goal - global_position)
 	direction.y = 0
 	direction = direction.normalized()
@@ -196,7 +213,7 @@ func apply_damage(amount: int, _hit_position: Vector3 = Vector3.ZERO) -> void:
 		memory = 4.0
 		if state in [State.IDLE, State.PATROL]: state = State.ALERT
 	sprite.set_state("hit")
-	AudioDirector.play("impact", "Enemies")
+	AudioDirector.play_at("impact",global_position,"Enemies")
 	if health <= 0: _die()
 
 func _die() -> void:

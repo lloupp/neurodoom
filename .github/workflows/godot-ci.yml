@@ -2,7 +2,7 @@ name: Godot Production
 
 on:
   pull_request:
-    branches: [master]
+    branches: [master, feat/godot-production-vertical-slice]
     paths:
       - 'godot/**'
       - 'GODOT_PRODUCTION.md'
@@ -33,6 +33,24 @@ jobs:
 
       - name: Godot production gates (fail on diagnostic errors)
         run: python3 godot/tools/run_checks.py
+
+      - name: Graphical UI and art captures (software rendering)
+        env:
+          NEURO_CAPTURE_DIR: /tmp/neuro-captures
+          LIBGL_ALWAYS_SOFTWARE: '1'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y xvfb
+          xvfb-run -a godot --path godot --audio-driver Dummy --scene res://tests/visual_smoke.tscn 2>&1 | tee /tmp/neuro-visual.log
+          ! grep -E 'SCRIPT ERROR|ERROR:|WARNING:' /tmp/neuro-visual.log
+          grep -q 'VISUAL SMOKE COMPLETE' /tmp/neuro-visual.log
+
+      - name: Upload graphical review captures
+        uses: actions/upload-artifact@v4
+        with:
+          name: neurodoom-visual-review-${{ github.sha }}
+          path: /tmp/neuro-captures/*.png
+          if-no-files-found: error
 
       - name: Export Windows and Linux test builds
         run: python3 godot/tools/run_checks.py --export

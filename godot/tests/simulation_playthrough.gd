@@ -41,6 +41,7 @@ func _physics_process(_delta: float) -> void:
 	for child in get_tree().root.get_children():
 		if child is NeuroHackPanel: hack = child
 	if hack:
+		if not hack.started: hack.started = true
 		if hack.selected >= 0: hack.pick(NeuroHacking.caesar(hack.state.program[hack.selected].hint,-1))
 		if hack.state.status != "running": print("SIM HACK ",hack.state.status," level=",GameState.level)
 		return
@@ -78,7 +79,8 @@ func _physics_process(_delta: float) -> void:
 		key(KEY_W,false)
 		_aim(player,threat.global_position+Vector3(0,1.1,0))
 		var weapon := "shotgun" if closest < 8 else "pistol"
-		if threat.enemy_kind in ["brute","boss","heavy","turret"]: weapon = "pulse_rifle"
+		if threat.enemy_kind in ["brute","boss","heavy","turret"] and player.unlocked.has("pulse_rifle"): weapon = "pulse_rifle"
+		if not player.unlocked.has(weapon): weapon = "pistol"
 		if player.reserves[weapon] <= 0 and player.magazines[weapon] <= 0: weapon = "pistol"
 		player.select_weapon(weapon)
 		player._fire()
@@ -129,7 +131,9 @@ func _choose_goal(player: NeuroPlayer) -> Node3D:
 				closest = distance
 	if is_instance_valid(best): return best
 	for node in get_tree().current_scene.get_children():
-		if node.get("role") == "T" and not GameState.power_restored: return node
+		if node.get("role") == "T" and not GameState.power_restored:
+			if Campaign.LEVELS[GameState.level].relay == "containment" and GameState.living_kinds().has("brute"): continue
+			return node
 		if node.get("role") == "D" and GameState.can_exit() and not node.opened: return node
 	# Find any remaining containment enemy if exit still gated.
 	if not GameState.can_exit():
@@ -146,7 +150,7 @@ func _aim(player: NeuroPlayer,point: Vector3) -> void:
 	player.camera.rotation.x = player.pitch
 
 func _path(from: Vector3,to: Vector3) -> Array[Vector2i]:
-	var grid: Array = Campaign.LEVELS[GameState.level].map
+	var grid: Array = Campaign.map_for(GameState.level)
 	var start := Vector2i(roundi(from.x/2),roundi(from.z/2))
 	var end := Vector2i(roundi(to.x/2),roundi(to.z/2))
 	var queue: Array[Vector2i] = [start]

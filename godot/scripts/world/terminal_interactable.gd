@@ -9,8 +9,8 @@ func _ready() -> void:
 
 func get_interaction_prompt() -> String:
 	if used:
-		return "E  Neural terminal — power online"
-	return "E  Restore facility power"
+		return Settings.prompt("interact","Neural terminal — power online")
+	return Settings.prompt("interact","Restore facility power")
 
 func interact(_player: Node) -> void:
 	if used:

@@ -13,7 +13,7 @@ func get_interaction_prompt() -> String:
 		return ""
 	if not GameState.power_restored:
 		return "A3 SECURITY — requires power"
-	return "E  Open A3 security door"
+	return Settings.prompt("interact","Open A3 security door")
 
 func interact(_player: Node) -> void:
 	if opened or not GameState.power_restored:

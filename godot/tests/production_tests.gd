@@ -28,6 +28,7 @@ func _run() -> void:
 	await settle()
 	_catalogs()
 	_maps()
+	check(Campaign.validate_levels(Campaign.current_levels()).is_empty(),"authored campaign maps pass reachability validation")
 	GameState.new_game()
 	await settle()
 	check(get_tree().current_scene.name == "Campaign","New Game opens campaign")
@@ -55,6 +56,12 @@ func _run() -> void:
 	await get_tree().process_frame
 	var hud := get_tree().current_scene.find_children("*","NeuroHUD",true,false)
 	check(not hud.is_empty() and float(hud[0].vignette.material.get_shader_parameter("intensity")) > 0.5,"damage vignette shows on hit")
+	var viewport_rect := get_viewport().get_visible_rect()
+	for control in [hud[0].hp_label,hud[0].ammo_label,hud[0].crosshair]:
+		check(viewport_rect.encloses(control.get_global_rect()),"essential HUD stays inside viewport: " + control.text)
+	check(hud[0].crosshair.get_global_rect().get_center().distance_to(viewport_rect.get_center()) < 8,"crosshair centered")
+	var view_model: WeaponViewModel = player.find_children("*","WeaponViewModel",true,false)[0]
+	check(viewport_rect.intersects(view_model.rect.get_global_rect()),"weapon model visible in viewport")
 	player.heal(50)
 	check(player.health == 100,"heal capped")
 	var start_position: Vector3 = player.position
@@ -88,6 +95,7 @@ func _run() -> void:
 	check(not get_tree().paused and not panel.root.visible,"inventory closes and resumes")
 	player.inventory.erase("sector_9_test")
 	check(GameState.world.test_card.collected,"pickup persistence tombstone")
+	await _product_flows()
 	_sprites()
 	await _combat()
 	# Restore deterministic start for progression and save/load checks.
@@ -269,6 +277,8 @@ func _combat() -> void:
 	for original in get_tree().get_nodes_in_group("enemies"): original.queue_free()
 	await settle()
 	var player = GameState.player
+	player.unlocked = NeuroWeapons.ORDER.duplicate()
+	player.unlocked = NeuroWeapons.ORDER.duplicate()
 	var enemy := NeuroEnemy.new()
 	enemy.name = "test_enemy"
 	enemy.enemy_kind = "drone"
@@ -350,3 +360,101 @@ func _combat() -> void:
 	check(player.health == 100,"distant rocket leaves shooter safe")
 	rocket_target.queue_free()
 
+
+func _product_flows() -> void:
+	var study: Texture2D = load("res://art/samples/heavy_pose_study.png")
+	check(study.get_image().get_format() == Image.FORMAT_RGBA8,"art study retains imported alpha")
+	check(study.get_width() >= 424 and study.get_height() >= 724,"art study region fits imported texture")
+	var route := NeuroGridNavigation.path(["#####","#.#.#","#...#","#####"],Vector2i(1,1),Vector2i(3,1))
+	check(route.size() == 4 and route.has(Vector2i(2,2)),"navigation routes around wall")
+	check(NeuroGridNavigation.path(["#####","#...#","#####"],Vector2i(1,1),Vector2i(3,1),[Vector2i(2,1)]).is_empty(),"closed gate prevents enemy path")
+	check(AudioDirector.spatial_pool.size() == 16,"spatial audio pool bounded")
+	var authoring := preload("res://addons/neurodoom_tools/scripts/sector_editor.gd").new()
+	get_tree().root.add_child(authoring)
+	var sector_zero: Array = authoring.rows.duplicate()
+	authoring._set_cell(1,1,1,"Q")
+	check(authoring.rows == sector_zero and authoring.drafts[1][1][1] == "Q","undo callback cannot paint the wrong selected sector")
+	authoring._set_cell(0,1,1,"Q")
+	authoring._request_select(1)
+	check(authoring.selected == 0,"unsaved sector switching blocked")
+	authoring.queue_free()
+	var malformed := Campaign.current_levels()
+	malformed[0].map[1] = "bad"
+	check(not Campaign.validate_levels(malformed).is_empty(),"invalid map rejected before authoring save")
+	var map_resource := NeuroSectorMap.new()
+	map_resource.level_id = "test"
+	map_resource.rows = PackedStringArray(["###","#P#","###"])
+	check(ResourceSaver.save(map_resource,"user://map-roundtrip.tres") == OK,"native map resource writes")
+	var imported = ResourceLoader.load("user://map-roundtrip.tres","",ResourceLoader.CACHE_MODE_IGNORE)
+	check(imported is NeuroSectorMap and imported.rows == map_resource.rows,"native map resource roundtrip")
+	var player = GameState.player
+	var original := GameState.snapshot()
+	check(player.unlocked == ["pistol"],"campaign starts with only pistol")
+	var reward := NeuroPickup.new()
+	reward.pickup_type = "weapon"
+	reward.item_id = "shotgun"
+	get_tree().current_scene.add_child(reward)
+	reward.interact(player)
+	check(player.unlocked.has("shotgun"),"weapon cache unlocks equipment")
+	var station := NeuroSupplyStation.new()
+	get_tree().current_scene.add_child(station)
+	check(station.collision_layer == 4 and station.collision_mask == 0,"supplies interact without blocking navigation")
+	player.credits = 12
+	check(not station.purchase("medkit") and player.credits == 12,"full health never charged")
+	player.apply_damage(20)
+	check(station.purchase("medkit") and player.health == 100 and player.credits == 6,"supply purchase heals and charges once")
+	check(not station.purchase("invalid") and player.credits == 6,"invalid purchase retains credits")
+	station.queue_free()
+	Settings.rebind("interact",KEY_F)
+	var pickup := NeuroPickup.new()
+	pickup.pickup_type = "keycard"
+	check(pickup.get_interaction_prompt().begins_with("[F]"),"pickup prompt follows remap")
+	pickup.free()
+	Settings.reset_bindings()
+	GameState.flags.power = true
+	player.keycards.append("card_0")
+	check(GameState.missing_requirements().is_empty(),"objective removes fulfilled requirements")
+	GameState.refresh_objective()
+	check(GameState.current_objective.contains("Open the security gate"),"objective identifies next action")
+	player.keycards.erase("card_0")
+	GameState.flags.clear()
+	var hud: NeuroHUD = get_tree().current_scene.find_children("*","NeuroHUD",true,false)[0]
+	Settings.values.subtitles = false
+	EventBus.message.emit("SAVED")
+	EventBus.narrative.emit("SHIVA")
+	hud._process(0.01)
+	check(hud.message_label.visible and not hud.narrative_label.visible,"notifications survive subtitles disabled")
+	Settings.values.subtitles = true
+	Settings.values.text_scale = 1.4
+	Settings.apply()
+	check(hud.hp_label.get_theme_font_size("font_size") == 28,"text scale applies to active HUD")
+	Settings.values.text_scale = 1.0
+	Settings.apply()
+	check(GameState.save_game(),"manual save succeeds")
+	var manual := Save.read_save()
+	player.credits += 5
+	check(GameState.save_game(true),"autosave succeeds")
+	check(Save.read_save().player.credits == manual.player.credits,"autosave leaves manual unchanged")
+	check(Save.read_save(Save.AUTO_PATH).player.credits == player.credits,"autosave stores latest state")
+	check(Save.preserve_previous(),"previous campaign preservation succeeds")
+	check(Save.read_save(Save.PREVIOUS_PATH).player.credits == player.credits,"previous campaign restorable")
+	check(GameState.save_game(),"second manual save succeeds")
+	var corrupt := FileAccess.open(Save.SAVE_PATH,FileAccess.WRITE)
+	corrupt.store_string("invalid")
+	corrupt.close()
+	check(Save.read_save().is_empty(),"corrupt primary rejected")
+	check(Save.available_slots().any(func(slot): return slot.path == Save.SAVE_PATH+".bak"),"valid backup offered for recovery")
+	check(Save.write_save(manual),"manual restored after test")
+	Settings.values.guided_hacking = true
+	var hack := NeuroHackPanel.new()
+	get_tree().root.add_child(hack)
+	var before: float = hack.state.time_left
+	hack._process(10)
+	check(hack.state.time_left == before and get_tree().paused,"guided hacking gives time to read")
+	hack.started = true
+	hack._process(0.5)
+	check(hack.state.time_left < before,"hacking clock starts explicitly")
+	hack._close(false,true)
+	await settle()
+	GameState.restore_run(original)
+	await settle()

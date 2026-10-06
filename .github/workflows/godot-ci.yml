@@ -1,0 +1,53 @@
+name: Godot Production
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - 'godot/**'
+      - 'GODOT_PRODUCTION.md'
+      - '.github/workflows/godot-ci.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'godot/**'
+      - 'GODOT_PRODUCTION.md'
+      - '.github/workflows/godot-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  godot-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Godot 4.7.2
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.2
+          use-dotnet: false
+          include-templates: true
+
+      - name: Godot production gates (fail on diagnostic errors)
+        run: python3 godot/tools/run_checks.py
+
+      - name: Export Windows and Linux test builds
+        run: python3 godot/tools/run_checks.py --export
+
+      - name: Smoke exported Linux binary
+        run: |
+          chmod +x godot/export/neurodoom-linux.x86_64
+          godot/export/neurodoom-linux.x86_64 --headless --quit-after 120 2>&1 | tee /tmp/export-smoke.log
+          ! grep -E 'SCRIPT ERROR|ERROR:|WARNING:' /tmp/export-smoke.log
+
+      - name: Upload desktop builds
+        uses: actions/upload-artifact@v4
+        with:
+          name: neurodoom-desktop-test-${{ github.sha }}
+          path: |
+            godot/export/neurodoom-windows.exe
+            godot/export/neurodoom-linux.x86_64
+          if-no-files-found: error

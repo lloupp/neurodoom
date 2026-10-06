@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "enemy": {
+    "source_size": "512x768",
+    "directions": [
+      "front",
+      "front_left",
+      "left",
+      "back_left",
+      "back",
+      "back_right",
+      "right",
+      "front_right"
+    ],
+    "animations": ["idle", "walk", "attack", "hit", "death"],
+    "pattern": "<animation>_<direction>_<frame:03>.png"
+  },
+  "weapon_viewmodel": {
+    "source_size": "1024x512",
+    "animations": ["idle", "fire", "recover", "reload"]
+  }
+}

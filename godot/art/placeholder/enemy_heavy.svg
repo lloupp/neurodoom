@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="520" viewBox="0 0 320 520">
+<defs>
+  <linearGradient id="armor" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#404853"/><stop offset="1" stop-color="#141820"/></linearGradient>
+  <linearGradient id="cloth" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#262a30"/><stop offset="1" stop-color="#090b0f"/></linearGradient>
+  <filter id="glow"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+</defs>
+<g stroke="#090b0f" stroke-width="8" stroke-linejoin="round">
+  <path d="M113 84 L132 54 L188 54 L208 86 L198 133 L121 133 Z" fill="url(#armor)"/>
+  <path d="M131 91 L151 86 L170 86 L191 93 L185 108 L137 108 Z" fill="#11151a"/>
+  <circle cx="149" cy="97" r="6" fill="#ff315f" stroke="none" filter="url(#glow)"/>
+  <circle cx="175" cy="97" r="6" fill="#ff315f" stroke="none" filter="url(#glow)"/>
+  <path d="M94 144 L126 126 L198 127 L228 151 L214 279 L111 279 Z" fill="url(#armor)"/>
+  <path d="M126 144 L193 144 L207 209 L114 209 Z" fill="#202730"/>
+  <path d="M145 154 L177 154 L180 174 L142 174 Z" fill="#e62d63" stroke-width="4"/>
+  <path d="M91 151 L61 180 L49 286 L82 295 L116 206 Z" fill="url(#cloth)"/>
+  <path d="M228 153 L259 185 L270 284 L237 297 L207 205 Z" fill="url(#cloth)"/>
+  <path d="M115 276 L157 279 L148 433 L101 433 Z" fill="url(#cloth)"/>
+  <path d="M166 279 L210 276 L220 433 L173 433 Z" fill="url(#cloth)"/>
+  <path d="M92 428 L150 428 L145 475 L79 475 Z" fill="#171c23"/>
+  <path d="M171 428 L228 428 L241 475 L176 475 Z" fill="#171c23"/>
+  <path d="M76 215 L244 211 L251 246 L70 251 Z" fill="#2f3740"/>
+  <path d="M102 224 L203 225 L205 241 L99 240 Z" fill="#11161c" stroke-width="3"/>
+</g>
+<path d="M58 480 Q160 505 260 480" stroke="#000" stroke-opacity=".35" stroke-width="18" fill="none"/>
+</svg>

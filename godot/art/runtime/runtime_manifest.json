@@ -1,0 +1,66 @@
+{
+  "schema": 1,
+  "enemy_sheet": {
+    "frame_width": 256,
+    "frame_height": 320,
+    "columns": 8,
+    "rows": 5,
+    "directions": [
+      "front",
+      "front_left",
+      "left",
+      "back_left",
+      "back",
+      "back_right",
+      "right",
+      "front_right"
+    ],
+    "states": [
+      "idle",
+      "walk",
+      "attack",
+      "hit",
+      "death"
+    ]
+  },
+  "weapon_sheet": {
+    "frame_width": 768,
+    "frame_height": 460,
+    "columns": 5,
+    "states": [
+      "idle",
+      "fire",
+      "recoil",
+      "reload",
+      "empty"
+    ]
+  },
+  "enemies": [
+    "drone",
+    "heavy",
+    "ghost",
+    "turret",
+    "boss",
+    "spitter",
+    "brute",
+    "wisp",
+    "stalker"
+  ],
+  "weapons": [
+    "pistol",
+    "shotgun",
+    "pulse_rifle",
+    "rocket_launcher"
+  ],
+  "utility": [
+    "pickups.svg",
+    "fx.svg"
+  ],
+  "fx_regions": {
+    "spark": [0, 48, 160, 160],
+    "bolt": [180, 96, 190, 64],
+    "toxic": [400, 58, 140, 140],
+    "energy": [570, 40, 220, 176],
+    "explosion": [815, 48, 160, 160]
+  }
+}

@@ -286,7 +286,12 @@ func _combat() -> void:
 	player._physics_process(2)
 	check(player.ammo == 12 and player.reserve_ammo < old_reserve,"timed reload transfers reserve")
 	enemy.health = enemy.max_health
+	enemy.state = NeuroEnemy.State.CHASE
+	check(AudioDirector.awareness(enemy) == 1.0,"chasing enemy is full threat")
+	AudioDirector._process(10.0)
+	check(AudioDirector.threat > 0.9 and AudioDirector.beds.music.volume_db > -14.0,"threat raises music")
 	enemy.state = NeuroEnemy.State.IDLE
+	check(AudioDirector.awareness(enemy) == 0.0,"idle enemy is no threat")
 	enemy.memory = 0.0
 	enemy.apply_damage(1)
 	check(enemy.state == NeuroEnemy.State.ALERT and enemy.memory > 0.0 and enemy.last_known.distance_to(player.global_position) < 0.01,"damage alerts enemy to shooter")

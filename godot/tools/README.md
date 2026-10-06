@@ -1,37 +1,13 @@
-# NEURODOOM Production Tools
+# NEURODOOM production tools
 
-## Implemented
+- **Sector editor dock:** choose a sector, paint cell symbols, Ctrl+Z undo, validate/save native resource overrides under `data/maps/`. Unsaved switching is blocked; explicit discard reloads the saved map. Existing resources receive `.bak` backups. Validator checks row widths, boundaries, symbols, required actors, reachability and card/relay gate deadlocks. Runtime and simulation use these resources; absent overrides fall back to authored campaign data.
+- **Enemy Lab:** F2 opens controls; choose enemy, tune parameters, select state and reset. ART STUDY shows the front heavy specimen from `art/samples/` for review; it does not replace directional campaign animation.
+- **Weapon Lab:** choose weapon, tune damage/interval/recoil/spread/pellets/reload and refill ammo.
+- **Material/Lighting Lab:** inspect materials under fog/light toggles. Authored metal/concrete/neural materials are editable SVGs consumed by LevelBlock and campaign sectors.
+- **LevelBlock / EncounterTrigger / StoryTerminal:** reusable inspector-driven components.
+- **Asset Validator / Sprite Forge:** editor menu diagnostics for the source/frame and runtime atlas contracts; no automatic AI-generated art is marked final.
+- **Playtest Recorder:** local, bounded event chunks with position samples and graphical frame timing. `playtest_report.py` groups chunks by session and summarizes objectives and frequently visited cells. Headless never claims FPS.
+- **Build/check runner:** `python3 godot/tools/run_checks.py --godot /path/to/godot`. `--export` requires matching templates and produces Windows/Linux debug test builds.
+- **Visual capture:** set `NEURO_CAPTURE_DIR`, run `tests/visual_smoke.tscn` on a display. CI uploads software-rendered screenshots separately from desktop builds.
 
-### Sprite Forge
-Editor menu command scans `art/source/` and emits `art/generated/sprite_manifest.json`.
-
-### Asset Validator
-Checks required production paths and reports source-art counts.
-
-### Enemy Lab
-Run `scenes/labs/enemy_lab.tscn` to test enemy pursuit, damage and billboard readability in a controlled arena.
-
-### Weapon Lab
-Run `scenes/labs/weapon_lab.tscn` to test shotgun feel and target response without loading a campaign level.
-
-### Material / Lighting Lab
-Run `scenes/labs/material_lab.tscn` to compare the base industrial material families under production lighting.
-
-### Level Builder Kit
-Instance `scenes/tools/level_block.tscn` and edit block size/material values in the inspector.
-
-### Encounter Editor
-Instance `scenes/tools/encounter_trigger.tscn`, configure spawn offsets in the inspector, and place it in a level.
-
-### Terminal / Story Editor
-Instance `scenes/tools/story_terminal.tscn` and author log text, objective transitions and power-restoration behavior directly in the inspector.
-
-### Playtest Recorder
-Runs automatically and writes JSON event logs to `user://playtest_*.json` when the vertical slice is completed.
-
-### Build Manager
-`tools/build_manager.gd` documents/prints the release CLI commands once export presets are configured.
-
-## Next art-production step
-
-Replace the placeholder SVG enemy and shotgun with authored PNG/WebP frames following `art/STYLE_GUIDE.md`.
+See `../docs/HUMAN_PLAYTEST.md` for the production acceptance session. Editor UI, audio and hardware performance still need direct human review.

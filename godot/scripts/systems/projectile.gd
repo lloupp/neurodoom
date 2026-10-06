@@ -11,16 +11,17 @@ var lifetime := 5.0
 var tint := Color("#ff9f32")
 
 func _ready() -> void:
-	var mesh := MeshInstance3D.new()
-	var sphere := SphereMesh.new()
-	sphere.radius = 0.14
-	sphere.height = 0.28
-	mesh.mesh = sphere
-	var material := StandardMaterial3D.new()
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	material.albedo_color = tint
-	mesh.material_override = material
-	add_child(mesh)
+	var visual := Sprite3D.new()
+	visual.texture = NeuroImpact.texture(fx_kind())
+	visual.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	visual.shaded = false
+	visual.transparent = true
+	visual.pixel_size = 0.0035
+	add_child(visual)
+
+func fx_kind() -> String:
+	if splash > 0: return "spark"
+	return "toxic" if tint == Color("#87e842") else "energy"
 
 func _physics_process(delta: float) -> void:
 	if GameState.completed:
@@ -68,5 +69,5 @@ func detonate(collider: Object) -> void:
 				body.apply_damage(amount, global_position)
 		EventBus.log_event("explosion", {"x":global_position.x,"z":global_position.z})
 		AudioDirector.play("explosion", "Weapons")
-	NeuroImpact.spawn(get_tree().current_scene, global_position, tint, splash > 0)
+	NeuroImpact.spawn(get_tree().current_scene, global_position, "explosion" if splash > 0 else fx_kind())
 	queue_free()

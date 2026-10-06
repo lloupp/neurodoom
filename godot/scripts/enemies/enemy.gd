@@ -167,7 +167,7 @@ func _attack(distance: float) -> void:
 	if enemy_kind == "boss" and attacks % 2 == 0:
 		# Deliberately short-range shockwave; cover also blocks it via LOS above.
 		if distance < 6.0: target.apply_damage(contact_damage)
-		NeuroImpact.spawn(get_tree().current_scene, global_position + Vector3.UP, Color("#ed2d74"), true)
+		NeuroImpact.spawn(get_tree().current_scene, global_position + Vector3.UP, "explosion")
 	elif str(stats.behavior) in ["ranged", "boss"]:
 		var count := 3 if enemy_kind in ["wisp", "boss"] else 1
 		for i in count:

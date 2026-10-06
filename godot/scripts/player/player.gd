@@ -182,7 +182,7 @@ func _fire() -> void:
 			var hit := _trace(float(data.range),float(data.spread))
 			if hit.is_empty(): continue
 			var hostile: bool = hit.collider.is_in_group("enemies")
-			NeuroImpact.spawn(get_tree().current_scene,hit.position,Color("#32d6e8") if hostile else Color("#ffaa55"))
+			NeuroImpact.spawn(get_tree().current_scene,hit.position,"energy" if hostile else "spark")
 			if hit.collider.has_method("apply_damage"):
 				hit.collider.apply_damage(int(data.damage),hit.position)
 				shot_hit = true

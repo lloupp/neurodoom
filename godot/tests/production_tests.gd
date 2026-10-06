@@ -143,6 +143,18 @@ func _catalogs() -> void:
 		var pixels := texture.get_image()
 		for column in 5:
 			check(pixels.get_region(Rect2i(column*768,0,768,460)).get_used_rect().size.x > 100,"nonempty weapon cell %s %d" % [id,column])
+	var fx: Texture2D = load(NeuroImpact.FX_PATH)
+	check(fx.get_size() == Vector2(1024,256),"fx dimensions")
+	var fx_pixels := fx.get_image()
+	for kind in NeuroImpact.REGIONS:
+		var region: Rect2 = NeuroImpact.REGIONS[kind]
+		var listed: Array = manifest.fx_regions[kind]
+		check(region == Rect2(listed[0],listed[1],listed[2],listed[3]),"fx region matches manifest " + kind)
+		var used := fx_pixels.get_region(Rect2i(region)).get_used_rect()
+		check(used.size.x > 20 and used.size.y > 20,"nonempty fx region " + kind)
+		# Effect is not cut by its region: a transparent margin remains on every side.
+		check(used.position.x > 0 and used.position.y > 0 and used.end.x < int(region.size.x) and used.end.y < int(region.size.y),"fx region not clipped " + kind)
+		check(NeuroImpact.texture(kind) == NeuroImpact.texture(kind),"fx texture cached " + kind)
 	check(Forge._parse_stem("walk_front_left_003").frame == 3,"forge naming")
 	check(Forge._parse_stem("invalid").is_empty(),"forge rejects missing frame")
 

@@ -261,6 +261,17 @@ func _combat() -> void:
 	await settle()
 	enemy.target = player
 	check(enemy.sees_player(),"enemy perception sees unobstructed player")
+	var lamp := OmniLight3D.new()
+	lamp.omni_range = 6.0
+	lamp.add_to_group("quality_lights")
+	get_tree().current_scene.add_child(lamp)
+	var far := Vector3(5000,0,5000)
+	lamp.global_position = far
+	var lit := NeuroPlayer.light_at(get_tree(),far)
+	lamp.global_position = far + Vector3(100,0,0)
+	var dark := NeuroPlayer.light_at(get_tree(),far)
+	check(lit > dark and is_equal_approx(dark,0.35),"light level falls with distance from lights")
+	lamp.free()
 	var wall := NeuroLevelBlock.new()
 	wall.position = player.position+Vector3(0,1,-2)
 	wall.block_size = Vector3(2,3,0.4)

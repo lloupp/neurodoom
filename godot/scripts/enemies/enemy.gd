@@ -80,7 +80,9 @@ func _physics_process(delta: float) -> void:
 	var offset := target.global_position - global_position
 	offset.y = 0
 	var distance := offset.length()
-	var visible := distance < detection_range and sees_player()
+	# Shadows shorten unalerted sight to half; once alerted, contact is kept at full range.
+	var sight := detection_range if memory > 0 else detection_range * lerpf(0.5,1.0,(float(target.light_level)-0.25)/0.75)
+	var visible := distance < sight and sees_player()
 	if visible and enemy_kind == "stalker" and distance < 6.0:
 		hit_reveal = 1.0
 	if visible:

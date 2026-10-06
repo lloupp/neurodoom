@@ -12,6 +12,7 @@ var hit_label: Label
 var boss_label: Label
 var boss_bar: ProgressBar
 var stamina_bar: ProgressBar
+var shadow_label: Label
 var vignette: ColorRect
 var message_time := 0.0
 var hit_time := 0.0
@@ -74,6 +75,11 @@ func _ready() -> void:
 	stamina_fill.bg_color = Color("#32d6e8")
 	stamina_bar.add_theme_stylebox_override("fill",stamina_fill)
 	root.add_child(stamina_bar)
+	shadow_label = label("IN SHADOW",Vector2.ZERO,Vector2(200,24),14)
+	shadow_label.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	shadow_label.position = Vector2(24,-76)
+	shadow_label.add_theme_color_override("font_color",Color("#7d8fa0"))
+	shadow_label.hide()
 	ammo_label = label("",Vector2.ZERO,Vector2(330,40))
 	ammo_label.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
 	ammo_label.position = Vector2(-345,-50)
@@ -137,6 +143,7 @@ func _process(delta: float) -> void:
 	if previous_hp > 0 and previous_hp <= 30: low = 0.35 + 0.15 * sin(Time.get_ticks_msec() * 0.006)
 	vignette.material.set_shader_parameter("intensity",maxf(damage_pulse,low))
 	if is_instance_valid(GameState.player):
+		shadow_label.visible = GameState.player.light_level < 0.5
 		stamina_bar.value = 100.0 * GameState.player.stamina / GameState.player.max_stamina
 		# Hidden when full to keep the HUD clean.
 		stamina_bar.visible = stamina_bar.value < 99.5

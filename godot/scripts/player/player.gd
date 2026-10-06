@@ -11,6 +11,9 @@ var max_health := 100
 const STAMINA_DRAIN := 35.0
 const STAMINA_REGEN := 30.0
 var stamina := 100.0
+# 0.25..1 from campaign lights (web lightLevelAt); scenes without them count as fully lit.
+var light_level := 1.0
+var light_timer := 0.0
 var max_stamina := 100.0
 var weapon := "pistol"
 var weapon_tuning: Dictionary = {}
@@ -124,6 +127,18 @@ func _physics_process(delta: float) -> void:
 		AudioDirector.play("footstep")
 		EventBus.log_event("footstep",{"x":position.x,"z":position.z})
 	_update_interaction_prompt()
+	light_timer -= delta
+	if light_timer <= 0:
+		light_timer = 0.2
+		light_level = light_at(get_tree(),global_position)
+
+static func light_at(tree: SceneTree, point: Vector3) -> float:
+	var lights := tree.get_nodes_in_group("quality_lights")
+	if lights.is_empty(): return 1.0
+	var light := 0.35
+	for source in lights:
+		light += maxf(0.0,1.0-source.global_position.distance_to(point)/source.omni_range) * 0.6
+	return clampf(light,0.25,1.0)
 
 func _trace(distance: float, spread := 0.0, interaction := false) -> Dictionary:
 	var origin := camera.global_position

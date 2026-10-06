@@ -15,6 +15,17 @@ var vignette: ColorRect
 var message_time := 0.0
 var hit_time := 0.0
 var previous_hp := 100
+var damage_pulse := 0.0
+# Edge-only damage vignette: the center of the screen stays readable.
+const VIGNETTE_CODE := """
+shader_type canvas_item;
+uniform float intensity = 0.0;
+void fragment() {
+	float edge = smoothstep(0.35, 0.95, length(UV - vec2(0.5)) * 1.414);
+	COLOR = vec4(COLOR.rgb, edge * intensity);
+}
+"""
+static var vignette_shader: Shader
 
 func label(text: String,pos: Vector2,size_value := Vector2(800,40),font_size := 20) -> Label:
 	var item := Label.new()
@@ -39,7 +50,13 @@ func _ready() -> void:
 	vignette = ColorRect.new()
 	vignette.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	vignette.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vignette.color = Color(0.6,0.02,0.06,0)
+	vignette.color = Color(0.6,0.02,0.06,1)
+	var vignette_material := ShaderMaterial.new()
+	if vignette_shader == null:
+		vignette_shader = Shader.new()
+		vignette_shader.code = VIGNETTE_CODE
+	vignette_material.shader = vignette_shader
+	vignette.material = vignette_material
 	root.add_child(vignette)
 	objective_label = label(GameState.current_objective,Vector2(24,22),Vector2(1000,65),18)
 	objective_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -87,7 +104,7 @@ func _ready() -> void:
 
 func _health(current: int,maximum: int) -> void:
 	hp_label.text = "HP %03d / %03d" % [current,maximum]
-	if current < previous_hp: vignette.color.a = 0.25
+	if current < previous_hp: damage_pulse = 0.85
 	previous_hp = current
 
 func _ammo(current: int,reserve: int) -> void:
@@ -103,7 +120,11 @@ func _process(delta: float) -> void:
 	message_label.visible = message_time > 0 and Settings.values.subtitles
 	hit_time = maxf(0,hit_time-delta)
 	hit_label.visible = hit_time > 0
-	vignette.color.a = move_toward(vignette.color.a,0,delta)
+	damage_pulse = move_toward(damage_pulse,0,delta*1.6)
+	# Low health keeps a slow pulse so the danger stays readable without the HP number.
+	var low := 0.0
+	if previous_hp > 0 and previous_hp <= 30: low = 0.35 + 0.15 * sin(Time.get_ticks_msec() * 0.006)
+	vignette.material.set_shader_parameter("intensity",maxf(damage_pulse,low))
 	boss_label.text = ""
 	boss_bar.hide()
 	for enemy in get_tree().get_nodes_in_group("enemies"):

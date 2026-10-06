@@ -58,3 +58,6 @@ A normal-mechanics headless bot completed sectors 0–4 without HP overrides, te
 - Tests: 562 checks (alert-on-damage, separation). All Godot gates and gameplay simulation pass. No human playtest has occurred.
 - fx.svg now drives impacts (spark on walls, energy on enemies), toxic/energy/rocket projectiles and explosions (with a short unshadowed light). The sheet has no grid, so explicit regions live in `NeuroImpact.REGIONS` and `runtime_manifest.json` `fx_regions`; tests check manifest match, non-empty pixels and no clipping. `bolt` region is directional and not yet used.
 - Player input moved from hard-coded keycodes to InputMap actions on physical keys (registered by the Settings autoload). A rebinding UI is not implemented yet.
+- Options → CONTROLS: per-action rebinding (click, press key; Esc cancels), conflicting key is swapped so no action is left unbound, RESET DEFAULTS, persisted in `neurodoom_settings.cfg` `[bindings]`.
+- Scorch decals (darkened fx spark, ImageTexture because decals use the renderer atlas) on hitscan wall hits and rocket blasts; pool of 32, oldest recycled.
+- Damage feedback: full-screen red tint replaced by an edge-only shader vignette; persistent slow pulse at HP ≤ 30. Headless uses a dummy renderer, so shader appearance is unverified until a graphical run.

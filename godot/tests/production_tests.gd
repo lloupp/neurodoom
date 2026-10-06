@@ -47,6 +47,9 @@ func _run() -> void:
 	check(Save.validate(Save.migrate(legacy)),"explicit v1 migration")
 	player.apply_damage(20)
 	check(player.health == 80,"damage")
+	await get_tree().process_frame
+	var hud := get_tree().current_scene.find_children("*","NeuroHUD",true,false)
+	check(not hud.is_empty() and float(hud[0].vignette.material.get_shader_parameter("intensity")) > 0.5,"damage vignette shows on hit")
 	player.heal(50)
 	check(player.health == 100,"heal capped")
 	var pickup := NeuroPickup.new()

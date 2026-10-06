@@ -356,10 +356,31 @@ func _combat() -> void:
 
 
 func _product_flows() -> void:
+	var study: Texture2D = load("res://art/samples/heavy_pose_study.png")
+	check(study.get_image().get_format() == Image.FORMAT_RGBA8,"art study retains imported alpha")
+	check(study.get_width() >= 424 and study.get_height() >= 724,"art study region fits imported texture")
 	var route := NeuroGridNavigation.path(["#####","#.#.#","#...#","#####"],Vector2i(1,1),Vector2i(3,1))
 	check(route.size() == 4 and route.has(Vector2i(2,2)),"navigation routes around wall")
 	check(NeuroGridNavigation.path(["#####","#...#","#####"],Vector2i(1,1),Vector2i(3,1),[Vector2i(2,1)]).is_empty(),"closed gate prevents enemy path")
 	check(AudioDirector.spatial_pool.size() == 16,"spatial audio pool bounded")
+	var authoring := preload("res://addons/neurodoom_tools/scripts/sector_editor.gd").new()
+	get_tree().root.add_child(authoring)
+	var sector_zero: Array = authoring.rows.duplicate()
+	authoring._set_cell(1,1,1,"Q")
+	check(authoring.rows == sector_zero and authoring.drafts[1][1][1] == "Q","undo callback cannot paint the wrong selected sector")
+	authoring._set_cell(0,1,1,"Q")
+	authoring._request_select(1)
+	check(authoring.selected == 0,"unsaved sector switching blocked")
+	authoring.queue_free()
+	var malformed := Campaign.current_levels()
+	malformed[0].map[1] = "bad"
+	check(not Campaign.validate_levels(malformed).is_empty(),"invalid map rejected before authoring save")
+	var map_resource := NeuroSectorMap.new()
+	map_resource.level_id = "test"
+	map_resource.rows = PackedStringArray(["###","#P#","###"])
+	check(ResourceSaver.save(map_resource,"user://map-roundtrip.tres") == OK,"native map resource writes")
+	var imported = ResourceLoader.load("user://map-roundtrip.tres","",ResourceLoader.CACHE_MODE_IGNORE)
+	check(imported is NeuroSectorMap and imported.rows == map_resource.rows,"native map resource roundtrip")
 	var player = GameState.player
 	var original := GameState.snapshot()
 	check(player.unlocked == ["pistol"],"campaign starts with only pistol")

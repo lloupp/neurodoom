@@ -93,6 +93,7 @@ var lab_kind := "heavy"
 var lab_values := {"hp":70.0,"speed":2.0,"detection":20.0,"damage":14.0}
 var inspector: Control
 var lab_animation := "auto"
+var sample_art := false
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F2:
@@ -138,6 +139,10 @@ func _build_inspector() -> void:
 		if mode == "enemy": lab_kind = choices[index]
 		else: GameState.player.select_weapon(choices[index]))
 	if mode == "enemy":
+		var sample := CheckButton.new()
+		sample.text = "ART STUDY: front pose (heavy only)"
+		sample.toggled.connect(func(value: bool): sample_art = value; _reset_enemy())
+		box.add_child(sample)
 		for key in lab_values:
 			_slider(box,key,lab_values[key],300 if key == "hp" else (30 if key != "speed" else 8),func(value: float): lab_values[key] = value)
 		var animation := OptionButton.new()
@@ -171,6 +176,7 @@ func _reset_enemy() -> void:
 	enemy.contact_damage = int(lab_values.damage)
 	enemy.position = Vector3(0,0.1,-4)
 	add_child(enemy)
+	enemy.sprite.sample_front = sample_art
 	if lab_animation != "auto":
 		enemy.set_physics_process(false)
 		enemy.sprite.set_state(lab_animation)

@@ -2,9 +2,15 @@
 extends EditorPlugin
 
 const Validator = preload("res://addons/neurodoom_tools/scripts/asset_validator.gd")
+var sector_editor: Control
+
 const SpriteForge = preload("res://addons/neurodoom_tools/scripts/sprite_forge.gd")
 
 func _enter_tree() -> void:
+	sector_editor = preload("res://addons/neurodoom_tools/scripts/sector_editor.gd").new()
+	sector_editor.name = "NEURODOOM Sectors"
+	sector_editor.editor_plugin = self
+	add_control_to_dock(EditorPlugin.DOCK_SLOT_RIGHT_UL,sector_editor)
 	add_tool_menu_item("NEURODOOM: Run Vertical Slice", _run_slice)
 	add_tool_menu_item("NEURODOOM: Run Enemy Lab", _run_enemy_lab)
 	add_tool_menu_item("NEURODOOM: Run Weapon Lab", _run_weapon_lab)
@@ -13,6 +19,9 @@ func _enter_tree() -> void:
 	add_tool_menu_item("NEURODOOM: Build Sprite Manifest", _build_sprite_manifest)
 
 func _exit_tree() -> void:
+	if is_instance_valid(sector_editor):
+		remove_control_from_docks(sector_editor)
+		sector_editor.queue_free()
 	remove_tool_menu_item("NEURODOOM: Run Vertical Slice")
 	remove_tool_menu_item("NEURODOOM: Run Enemy Lab")
 	remove_tool_menu_item("NEURODOOM: Run Weapon Lab")
@@ -34,6 +43,7 @@ func _run_material_lab() -> void:
 
 func _validate_assets() -> void:
 	var report := Validator.validate()
+	for issue in NeuroCampaign.validate_levels(NeuroCampaign.current_levels()): report.append("FAIL map: "+issue)
 	print("\n=== NEURODOOM ASSET VALIDATION ===")
 	for line in report:
 		print(line)

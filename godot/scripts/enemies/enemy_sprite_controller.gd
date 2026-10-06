@@ -17,6 +17,8 @@ var flash := 0.0
 var transient := 0.0
 var opacity := 1.0
 var death_finished := false
+var sample_front := false
+var sample_region: AtlasTexture
 
 func configure(enemy_kind: String, scale_factor := 1.0) -> void:
 	kind = enemy_kind
@@ -69,6 +71,14 @@ func _process(delta: float) -> void:
 		direction = direction_index(facing.normalized(), offset.normalized())
 	var frame := mini(int(elapsed * fps[state]), int(frame_counts[state]) - 1) if state in ["hit", "death"] else int(elapsed * fps[state]) % int(frame_counts[state])
 	texture = Cache.region(sheets[state][frame], Vector2i(direction, STATES.find(state)), Vector2i(256, 320))
+	if sample_front and kind == "heavy":
+		if sample_region == null:
+			sample_region = AtlasTexture.new()
+			sample_region.atlas = load("res://art/samples/heavy_pose_study.png")
+			sample_region.region = Rect2(0,0,424,724)
+		texture = sample_region
+		pixel_size = 0.00265
+	else: pixel_size = 0.006 * (1.4 if kind in ["boss","brute"] else 1.0)
 	# Small temporal motion for the single-pose baseline, explicitly not painted frames.
 	position.y = base_y + (sin(elapsed * 10.0) * 0.025 if state == "walk" else 0.0)
 	modulate = Color(1.8, 0.65, 0.65, opacity) if flash > 0 else Color(1, 1, 1, opacity)

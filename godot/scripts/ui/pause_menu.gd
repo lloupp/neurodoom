@@ -54,6 +54,12 @@ func _death() -> void:
 	_pause()
 	_clear()
 	var box := Factory.panel(root,"SIGNAL LOST")
-	Factory.button(box,"RETRY CHECKPOINT",GameState.respawn).grab_focus()
+	Factory.button(box,"RETRY CHECKPOINT",_retry).grab_focus()
 	Factory.button(box,"LOAD SAVED RUN",GameState.load_game)
 	Factory.button(box,"RETURN TO MAIN MENU",GameState.return_to_menu)
+
+func _retry() -> void:
+	# Campaign retry reloads the scene; the legacy slice respawns in place and must unpause here.
+	dead = false
+	resume()
+	GameState.respawn()

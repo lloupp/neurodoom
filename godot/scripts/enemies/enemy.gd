@@ -141,6 +141,8 @@ func _physics_process(delta: float) -> void:
 		query.exclude = [get_rid()]
 		if not get_world_3d().direct_space_state.intersect_ray(query).is_empty():
 			direction = Vector3(direction.z, 0, -direction.x) * (1.0 if int(clock) % 6 < 3 else -1.0)
+	if move_speed > 0:
+		direction = (direction + _separation()).normalized()
 	velocity.x = direction.x * move_speed
 	velocity.z = direction.z * move_speed
 	velocity.y = -0.1 if is_on_floor() else velocity.y - 20.0 * delta
@@ -148,6 +150,17 @@ func _physics_process(delta: float) -> void:
 	sprite.opacity = 0.48 if enemy_kind == "ghost" else (0.18 if enemy_kind == "stalker" and state not in [State.ATTACK] and hit_reveal <= 0 else 1.0)
 	if enemy_kind == "wisp": sprite.base_y = 1.35 + sin(clock * 2) * 0.18
 	if not attack_pending: sprite.set_state("walk" if move_speed > 0 else "idle")
+
+# Light push away from nearby living enemies so groups do not stack on one point.
+func _separation() -> Vector3:
+	var push := Vector3.ZERO
+	for other in get_tree().get_nodes_in_group("enemies"):
+		if other == self or other.state == State.DEAD: continue
+		var away: Vector3 = global_position - other.global_position
+		away.y = 0
+		var d := away.length()
+		if d > 0.01 and d < 1.4: push += away / d * (1.4 - d)
+	return push
 
 func _attack(distance: float) -> void:
 	attacks += 1
@@ -174,6 +187,12 @@ func apply_damage(amount: int, _hit_position: Vector3 = Vector3.ZERO) -> void:
 	if state == State.DEAD or amount <= 0: return
 	health = maxi(0, health - maxi(1, int(amount * float(stats.armor))))
 	hit_reveal = 2.0
+	# Being shot always reveals the shooter, even beyond hearing/detection range.
+	var shooter := get_tree().get_first_node_in_group("player") as Node3D
+	if is_instance_valid(shooter):
+		last_known = shooter.global_position
+		memory = 4.0
+		if state in [State.IDLE, State.PATROL]: state = State.ALERT
 	sprite.set_state("hit")
 	AudioDirector.play("impact", "Enemies")
 	if health <= 0: _die()

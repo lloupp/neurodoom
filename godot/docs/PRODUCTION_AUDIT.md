@@ -49,3 +49,10 @@ This is a campaign **candidate**, not a release declaration. The principal gateâ
 ## Automated gameplay outcome
 
 A normal-mechanics headless bot completed sectors 0â€“4 without HP overrides, teleport, forced kills, objective flags or resource grants: 77.57 simulated seconds, 0 deaths, 13 enemies defeated, 75 shots, 73 successful shots, 33 damage, 5 pickups. This validates mechanical reachability, not human difficulty: the bot aims precisely and uses the catalogs. The mandatory seeded rerun also passed: 80.68 simulated seconds, 0 deaths, 13 kills, 77 shots, 75 successful shots, 13 damage, 5 pickups. Production tests now cover 560 checks, including imported per-cell pixels. Pickups now use a separate collision layer: ray-interactable but do not block walking, enemy perception or projectiles. Earlier stalled simulations were retained in the scratch logs and corrected (door interaction threshold in the bot; solid pickup obstruction).
+
+## Cycle 2026-10-06
+
+- P1: enemies shot from beyond hearing range (24 m; pistol range 44 m) never reacted. Damage now sets last known position to the shooter and alerts idle/patrolling enemies.
+- P2: moving enemies had no separation and stacked on one point. Added light local separation steering.
+- P2: legacy slice "RETRY CHECKPOINT" respawned in place but left the death menu up, tree paused and mouse released. Pause menu now resumes before respawn.
+- Tests: 562 checks (alert-on-damage, separation). All Godot gates and gameplay simulation pass. No human playtest has occurred.

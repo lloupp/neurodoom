@@ -215,6 +215,17 @@ func _combat() -> void:
 	player.reload_weapon()
 	player._physics_process(2)
 	check(player.ammo == 12 and player.reserve_ammo < old_reserve,"timed reload transfers reserve")
+	enemy.health = enemy.max_health
+	enemy.state = NeuroEnemy.State.IDLE
+	enemy.memory = 0.0
+	enemy.apply_damage(1)
+	check(enemy.state == NeuroEnemy.State.ALERT and enemy.memory > 0.0 and enemy.last_known.distance_to(player.global_position) < 0.01,"damage alerts enemy to shooter")
+	var twin := NeuroEnemy.new()
+	twin.enemy_kind = "drone"
+	get_tree().current_scene.add_child(twin)
+	twin.global_position = enemy.global_position + Vector3(0.3,0,0)
+	check(enemy._separation().x < 0.0,"nearby enemies push apart")
+	twin.queue_free()
 	enemy.apply_damage(10000)
 	check(enemy.state == NeuroEnemy.State.DEAD and is_instance_valid(enemy),"death holds visual")
 	await settle(60)

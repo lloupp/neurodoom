@@ -9,6 +9,7 @@ var shooter: CollisionObject3D
 var hostile := false
 var lifetime := 5.0
 var tint := Color("#ff9f32")
+var _normal := Vector3.ZERO
 
 func _ready() -> void:
 	var visual := Sprite3D.new()
@@ -36,6 +37,7 @@ func _physics_process(delta: float) -> void:
 	var hit := get_world_3d().direct_space_state.intersect_ray(query)
 	if not hit.is_empty():
 		global_position = hit.position
+		if not hit.collider.is_in_group("enemies") and not hit.collider.is_in_group("player"): _normal = hit.normal
 		detonate(hit.collider)
 	elif lifetime <= 0:
 		detonate(null)
@@ -70,4 +72,6 @@ func detonate(collider: Object) -> void:
 		EventBus.log_event("explosion", {"x":global_position.x,"z":global_position.z})
 		AudioDirector.play("explosion", "Weapons")
 	NeuroImpact.spawn(get_tree().current_scene, global_position, "explosion" if splash > 0 else fx_kind())
+	if splash > 0 and _normal != Vector3.ZERO:
+		NeuroImpact.scorch(get_tree().current_scene, global_position, _normal, 2.4)
 	queue_free()

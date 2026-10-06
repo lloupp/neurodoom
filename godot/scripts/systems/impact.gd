@@ -45,3 +45,31 @@ static func spawn(parent: Node, point: Vector3, kind := "spark") -> void:
 		visual.add_child(light)
 		tween.tween_property(light, "light_energy", 0.0, duration)
 	tween.chain().tween_callback(visual.queue_free)
+
+# Scorch decals reuse the spark art, darkened. Image texture (not AtlasTexture) because
+# decals are packed into the renderer's own atlas. Fixed pool: oldest mark is recycled.
+const MAX_SCORCH := 32
+static var scorch_texture: ImageTexture
+static var scorches: Array[Decal] = []
+
+static func scorch(parent: Node, point: Vector3, normal: Vector3, size := 0.35) -> Decal:
+	if scorch_texture == null:
+		scorch_texture = ImageTexture.create_from_image(load(FX_PATH).get_image().get_region(Rect2i(REGIONS.spark)))
+	scorches = scorches.filter(func(d): return is_instance_valid(d))
+	var decal: Decal
+	if scorches.size() >= MAX_SCORCH:
+		decal = scorches.pop_front()
+		decal.reparent(parent, false)
+	else:
+		decal = Decal.new()
+		decal.texture_albedo = scorch_texture
+		decal.modulate = Color(0.08, 0.07, 0.07, 0.85)
+		decal.cull_mask = 1
+		parent.add_child(decal)
+	scorches.append(decal)
+	decal.size = Vector3(size, 0.2, size)
+	# Decal projects along local -Y: point Y away from the surface.
+	var up := normal.normalized()
+	var side := up.cross(Vector3.FORWARD if absf(up.dot(Vector3.FORWARD)) < 0.9 else Vector3.RIGHT).normalized()
+	decal.global_transform = Transform3D(Basis(side, up, side.cross(up)), point)
+	return decal

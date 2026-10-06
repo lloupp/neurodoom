@@ -155,6 +155,13 @@ func _catalogs() -> void:
 		# Effect is not cut by its region: a transparent margin remains on every side.
 		check(used.position.x > 0 and used.position.y > 0 and used.end.x < int(region.size.x) and used.end.y < int(region.size.y),"fx region not clipped " + kind)
 		check(NeuroImpact.texture(kind) == NeuroImpact.texture(kind),"fx texture cached " + kind)
+	var decal_root := Node3D.new()
+	get_tree().root.add_child(decal_root)
+	var first := NeuroImpact.scorch(decal_root,Vector3.ZERO,Vector3.BACK)
+	check(first.global_transform.basis.y.is_equal_approx(Vector3.BACK),"scorch faces surface normal")
+	for i in NeuroImpact.MAX_SCORCH + 5: NeuroImpact.scorch(decal_root,Vector3(i,0,0),Vector3.UP)
+	check(decal_root.get_child_count() == NeuroImpact.MAX_SCORCH,"scorch decal pool bounded")
+	decal_root.free()
 	for action in Settings.BINDINGS.keys() + ["fire"]:
 		check(InputMap.has_action(action) and not InputMap.action_get_events(action).is_empty(),"input action bound " + action)
 	var w := InputEventKey.new()
